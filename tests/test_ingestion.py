@@ -32,6 +32,10 @@ def test_definitions_and_footnotes(regulation):
     assert "( 1 )" not in regulation.by_id()["rct_9"].text  # footnote call-outs removed
 
 
+def test_exponents_preserved(regulation):
+    assert "greater than 10^25" in regulation.by_id()["art_51"].text
+
+
 def test_annex_with_three_column_tables(regulation):
     annex1 = regulation.by_id()["anx_I"]
     assert annex1.word_count > 800

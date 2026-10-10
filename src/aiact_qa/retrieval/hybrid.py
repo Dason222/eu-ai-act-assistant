@@ -8,6 +8,7 @@ references ("what does Article 26 require?") must win regardless of either score
 from __future__ import annotations
 
 import logging
+import re
 from dataclasses import dataclass, field
 
 from aiact_qa.models import Chunk
@@ -18,6 +19,7 @@ from aiact_qa.retrieval.references import Reference, find_references
 log = logging.getLogger(__name__)
 
 RRF_K = 60
+_NUMERIC = re.compile(r"\d+(?:[/^.]\d+)+|\b\d{3,}\b")
 # Recitals explain but do not bind; they paraphrase articles heavily and would otherwise crowd them out.
 KIND_WEIGHT = {"article": 1.0, "definition": 1.0, "annex": 1.0, "recital": 0.75}
 MAX_CHUNKS_PER_PROVISION = 3
@@ -130,7 +132,9 @@ class HybridRetriever:
             # explicit references dominate: weight large enough to outrank any fused score
             add(self._reference_hits(references), "reference", weight=RRF_K)
         if use_bm25:
-            add([i for i, _ in self.bm25.search(expand_query(query), candidate_k)], "bm25")
+            # numbers and identifiers ("10^25", "2016/679") are where embeddings are weakest
+            lexical_weight = 2.0 if _NUMERIC.search(query) else 1.0
+            add([i for i, _ in self.bm25.search(expand_query(query), candidate_k)], "bm25", lexical_weight)
         if use_dense and self.dense is not None:
             dense_hits = self.dense.search(query, candidate_k)
             if dense_hits:

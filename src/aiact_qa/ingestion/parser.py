@@ -299,6 +299,10 @@ def parse_regulation(html: str, base_url: str = ELI_URL, source_sha256: str = ""
     # Footnote call-outs such as "( 1 )" are noise for Q&A; the footnotes themselves are not parsed.
     for note_call in soup.select('a[id^="ntc"]'):
         note_call.decompose()
+    # Exponents must survive flattening: "10<sup>25</sup>" is the GPAI compute threshold, not "1025".
+    for sup in soup.select("span.oj-super"):
+        if sup.get_text().strip().isdigit():
+            sup.replace_with("^" + sup.get_text().strip())
 
     title_el = soup.find(id="tit_1")
     title = clean(title_el.get_text(" ")) if title_el else "Regulation (EU) 2024/1689"
