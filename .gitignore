@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.pytest_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+build/
+dist/
+
+# Secrets / local config
+.env
+
+# Generated data (rebuilt by `aiact-qa ingest`); the raw EUR-Lex snapshot and the eval set are versioned
+data/processed/
+data/index/
+data/feedback/
+models/
+reports/*.tmp
+
+# OS / editors
+.DS_Store
+.idea/
+.vscode/
