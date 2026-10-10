@@ -11,51 +11,222 @@ Flow per question:
 
 from __future__ import annotations
 
+import logging
+import re
+import time
 from collections.abc import Iterator
 from typing import Any
 
 from aiact_qa.config import Settings, get_settings
-from aiact_qa.models import Provision
+from aiact_qa.generation import prompts
+from aiact_qa.generation.citations import extract_citations, unverified_warning
+from aiact_qa.generation.llm import ClaudeLLM, LLMError, LLMResult, credentials_available
+from aiact_qa.ingestion.build import build_knowledge_base, load_processed, processed_is_fresh
+from aiact_qa.models import Chunk, Provision, Regulation
+from aiact_qa.retrieval.dense import DenseIndex
+from aiact_qa.retrieval.hybrid import HybridRetriever, RetrievalResult
 from aiact_qa.schemas import Answer, Source
+
+log = logging.getLogger(__name__)
 
 # History format accepted everywhere: [{"role": "user" | "assistant", "content": "..."}]
 History = list[dict[str, str]]
 
+_ENGLISH_HINTS = re.compile(r"\b(the|what|which|who|how|is|are|does|do|can|when|of|and|for|to)\b", re.I)
+
+
+def looks_english(text: str) -> bool:
+    letters = [c for c in text if c.isalpha()]
+    if not letters:
+        return True
+    non_ascii = sum(1 for c in letters if not c.isascii()) / len(letters)
+    return non_ascii < 0.1 and bool(_ENGLISH_HINTS.search(text))
+
 
 class QAEngine:
-    """Contract (implementation in progress; signatures are stable)."""
+    def __init__(
+        self,
+        regulation: Regulation,
+        chunks: list[Chunk],
+        retriever: HybridRetriever,
+        llm: ClaudeLLM | None,
+        settings: Settings,
+    ) -> None:
+        self.regulation = regulation
+        self.chunks = chunks
+        self.retriever = retriever
+        self.llm = llm
+        self.settings = settings
+        self._provisions = regulation.by_id()
+        self._system = prompts.system_blocks(regulation)
 
+    # ------------------------------------------------------------------------------------------ #
     @classmethod
-    def from_settings(cls, settings: Settings | None = None) -> QAEngine:
+    def from_settings(cls, settings: Settings | None = None, llm: ClaudeLLM | None = None) -> QAEngine:
         """Load the persisted index (building it on first use) and the configured LLM client."""
-        raise NotImplementedError
+        settings = settings or get_settings()
+        if not processed_is_fresh(settings):
+            build_knowledge_base(settings)
+        regulation, chunks = load_processed(settings.processed_dir)
 
-    def ask(self, question: str, history: History | None = None, top_k: int | None = None) -> Answer:
-        """Answer a question (blocking)."""
-        raise NotImplementedError
+        dense = None
+        if settings.embedding_model.lower() != "none":
+            dense = DenseIndex.load(settings.index_dir, settings.embedding_model, settings.model_cache_dir)
+            if dense is None or not dense.matches(chunks):
+                build_knowledge_base(settings)
+                regulation, chunks = load_processed(settings.processed_dir)
+                dense = DenseIndex.load(settings.index_dir, settings.embedding_model, settings.model_cache_dir)
+        retriever = HybridRetriever(
+            chunks, dense, reranker_model=settings.reranker_model, cache_dir=settings.model_cache_dir
+        )
 
+        if llm is None and settings.llm_provider == "anthropic":
+            if credentials_available():
+                llm = ClaudeLLM(
+                    model=settings.llm_model,
+                    effort=settings.llm_effort,
+                    max_tokens=settings.llm_max_tokens,
+                    timeout_s=settings.llm_timeout_s,
+                    server_side_fallbacks=settings.llm_server_side_fallbacks,
+                )
+            else:
+                log.warning("no Anthropic credentials found - running in extractive mode (no LLM)")
+        return cls(regulation, chunks, retriever, llm, settings)
+
+    # ------------------------------------------------------------------------------------------ #
+    def stats(self) -> dict[str, Any]:
+        return {
+            "regulation": "Regulation (EU) 2024/1689 (AI Act)",
+            "source": self.regulation.source_url,
+            "source_sha256": self.regulation.source_sha256,
+            "articles": len(self.regulation.articles),
+            "recitals": len(self.regulation.recitals),
+            "annexes": len(self.regulation.annexes),
+            "chunks": len(self.chunks),
+            "retrieval": self.retriever.mode,
+            "embedding_model": self.settings.embedding_model if self.retriever.dense else None,
+            "reranker": self.settings.reranker_model or None,
+            "llm": {"mode": "llm" if self.llm else "extractive", "model": self.llm.model if self.llm else None},
+        }
+
+    def get_provision(self, provision_id: str) -> Provision | None:
+        return self._provisions.get(provision_id)
+
+    # ------------------------------------------------------------------------------------------ #
+    def _to_sources(self, result: RetrievalResult, top_k: int) -> list[Source]:
+        sources: list[Source] = []
+        words = 0
+        for hit in result.hits[:top_k]:
+            n_words = hit.chunk.word_count
+            if sources and words + n_words > self.settings.max_context_words:
+                break
+            words += n_words
+            c = hit.chunk
+            sources.append(
+                Source(
+                    n=len(sources) + 1, chunk_id=c.id, provision_id=c.provision_id, kind=c.kind,
+                    label=c.label, title=c.title, text=c.text, url=c.url,
+                    score=round(hit.score, 5), retrievers=list(hit.retrievers),
+                )
+            )
+        return sources
+
+    def search(self, query: str, k: int = 8) -> list[Source]:
+        result = self.retriever.retrieve(query, k=k, candidate_k=self.settings.candidate_k)
+        return self._to_sources(result, k)
+
+    def _standalone_question(self, question: str, history: History) -> str:
+        needs_rewrite = bool(history) or not looks_english(question)
+        if not needs_rewrite:
+            return question
+        if self.llm is None:
+            last_user = next((t["content"] for t in reversed(history) if t["role"] == "user"), "")
+            return f"{last_user} {question}".strip()
+        try:
+            result = self.llm.complete(
+                prompts.CONDENSE_INSTRUCTIONS,
+                prompts.condense_messages(question, history),
+                effort=self.settings.llm_rewrite_effort,
+            )
+            rewritten = result.text.strip().strip('"')
+            return rewritten if rewritten and not result.refused else question
+        except LLMError as exc:
+            log.warning("query rewriting failed (%s); using the raw question", exc)
+            return question
+
+    def _extractive_answer(self, sources: list[Source], reason: str) -> str:
+        lines = [f"_{reason} The most relevant provisions of the AI Act are quoted below._", ""]
+        for s in sources[:4]:
+            excerpt = " ".join(s.text.split()[:90])
+            more = " …" if len(s.text.split()) > 90 else ""
+            heading = f"**{s.label}**" + (f" - {s.title}" if s.title else "")
+            lines += [heading, f"> {excerpt}{more} [{s.label}]", ""]
+        return "\n".join(lines).strip()
+
+    # ------------------------------------------------------------------------------------------ #
     def ask_stream(
         self, question: str, history: History | None = None, top_k: int | None = None
     ) -> Iterator[dict[str, Any]]:
-        """Answer a question, streaming events:
+        started = time.perf_counter()
+        question = (question or "").strip()
+        if not question:
+            raise ValueError("question must not be empty")
+        if len(question) > self.settings.max_question_chars:
+            raise ValueError(f"question longer than {self.settings.max_question_chars} characters")
+        history = [t for t in (history or []) if t.get("role") in {"user", "assistant"} and t.get("content")]
+        history = history[-2 * self.settings.max_history_turns :]
+        top_k = top_k or self.settings.top_k
 
-        {"type": "sources", "sources": [Source.to_dict(), ...], "standalone_question": str}
-        {"type": "delta", "text": str}                      # answer text as it is generated
-        {"type": "done", "answer": Answer.to_dict()}        # final, with validated citations
-        """
-        raise NotImplementedError
+        standalone = self._standalone_question(question, history)
+        result = self.retriever.retrieve(standalone, k=top_k, candidate_k=self.settings.candidate_k)
+        sources = self._to_sources(result, top_k)
+        yield {"type": "sources", "sources": [s.to_dict() for s in sources], "standalone_question": standalone}
 
-    def search(self, query: str, k: int = 8) -> list[Source]:
-        """Retrieval only (no LLM)."""
-        raise NotImplementedError
+        answer = Answer(question=question, answer="", sources=sources, standalone_question=standalone)
+        off_topic = (
+            not result.references
+            and result.best_dense_similarity is not None
+            and result.best_dense_similarity < self.settings.min_relevance
+        )
+        if off_topic:
+            answer.mode, answer.answer, answer.sources = "out_of_scope", prompts.OUT_OF_SCOPE_ANSWER, []
+            yield {"type": "delta", "text": answer.answer}
+        elif self.llm is None:
+            answer.mode = "extractive"
+            answer.answer = self._extractive_answer(sources, "No LLM is configured (extractive mode).")
+            yield {"type": "delta", "text": answer.answer}
+        else:
+            messages = [*history, {"role": "user", "content": prompts.user_message(question, sources)}]
+            llm_result = LLMResult()
+            try:
+                for delta in self.llm.stream(self._system, messages, llm_result):
+                    yield {"type": "delta", "text": delta}
+                answer.answer, answer.model, answer.usage = llm_result.text, llm_result.model, llm_result.usage
+                if llm_result.refused:
+                    answer.mode = "refused"
+                    answer.answer = answer.answer or "The model declined to answer this request."
+                if llm_result.stop_reason == "max_tokens":
+                    answer.warnings.append("The answer was truncated (max_tokens reached).")
+            except LLMError as exc:
+                log.error("generation failed: %s", exc)
+                answer.mode = "extractive"
+                answer.warnings.append(f"LLM unavailable ({exc}); showing the retrieved provisions instead.")
+                answer.answer = self._extractive_answer(sources, "The language model is unavailable.")
+                yield {"type": "delta", "text": ("\n\n" if llm_result.text else "") + answer.answer}
 
-    def get_provision(self, provision_id: str) -> Provision | None:
-        """Full text of an article / recital / annex by id ("art_5", "rct_27", "anx_III")."""
-        raise NotImplementedError
+        answer.citations = extract_citations(answer.answer, answer.sources)
+        if warning := unverified_warning(answer.citations):
+            answer.warnings.append(warning)
+        answer.latency_ms = int((time.perf_counter() - started) * 1000)
+        yield {"type": "done", "answer": answer.to_dict()}
 
-    def stats(self) -> dict[str, Any]:
-        """Index and LLM configuration summary for /health."""
-        raise NotImplementedError
+    def ask(self, question: str, history: History | None = None, top_k: int | None = None) -> Answer:
+        final: dict[str, Any] | None = None
+        for event in self.ask_stream(question, history, top_k):
+            if event["type"] == "done":
+                final = event["answer"]
+        assert final is not None
+        return Answer.from_dict(final)
 
 
 def get_engine(settings: Settings | None = None) -> QAEngine:
