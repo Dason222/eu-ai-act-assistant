@@ -20,7 +20,8 @@ from typing import Any
 from aiact_qa.config import Settings, get_settings
 from aiact_qa.generation import prompts
 from aiact_qa.generation.citations import extract_citations, unverified_warning
-from aiact_qa.generation.llm import ClaudeLLM, LLMError, LLMResult, credentials_available
+from aiact_qa.generation.llm import LLMError, LLMResult
+from aiact_qa.generation.providers import LLM, available_providers, make_llm
 from aiact_qa.ingestion.build import build_knowledge_base, load_processed, processed_is_fresh
 from aiact_qa.models import Chunk, Provision, Regulation
 from aiact_qa.retrieval.dense import DenseIndex
@@ -49,7 +50,7 @@ class QAEngine:
         regulation: Regulation,
         chunks: list[Chunk],
         retriever: HybridRetriever,
-        llm: ClaudeLLM | None,
+        llm: LLM | None,
         settings: Settings,
     ) -> None:
         self.regulation = regulation
@@ -59,10 +60,11 @@ class QAEngine:
         self.settings = settings
         self._provisions = regulation.by_id()
         self._system = prompts.system_blocks(regulation)
+        self._variants: dict[tuple[str, str], QAEngine] = {}
 
     # ------------------------------------------------------------------------------------------ #
     @classmethod
-    def from_settings(cls, settings: Settings | None = None, llm: ClaudeLLM | None = None) -> QAEngine:
+    def from_settings(cls, settings: Settings | None = None, llm: LLM | None = None) -> QAEngine:
         """Load the persisted index (building it on first use) and the configured LLM client."""
         settings = settings or get_settings()
         if not processed_is_fresh(settings):
@@ -80,18 +82,25 @@ class QAEngine:
             chunks, dense, reranker_model=settings.reranker_model, cache_dir=settings.model_cache_dir
         )
 
-        if llm is None and settings.llm_provider == "anthropic":
-            if credentials_available():
-                llm = ClaudeLLM(
-                    model=settings.llm_model,
-                    effort=settings.llm_effort,
-                    max_tokens=settings.llm_max_tokens,
-                    timeout_s=settings.llm_timeout_s,
-                    server_side_fallbacks=settings.llm_server_side_fallbacks,
-                )
-            else:
-                log.warning("no Anthropic credentials found - running in extractive mode (no LLM)")
+        if llm is None:
+            try:
+                llm = make_llm(settings)
+            except ValueError as exc:
+                log.warning("%s - running in extractive mode (no LLM)", exc)
         return cls(regulation, chunks, retriever, llm, settings)
+
+    def for_provider(self, provider: str | None = None, model: str | None = None) -> QAEngine:
+        """Same index, different LLM (e.g. compare Claude, GPT and Mistral on one question)."""
+        if not provider and not model:
+            return self
+        key = ((provider or self.settings.llm_provider).lower(), model or "")
+        if key not in self._variants:
+            llm = make_llm(self.settings, provider=key[0], model=model)
+            self._variants[key] = QAEngine(self.regulation, self.chunks, self.retriever, llm, self.settings)
+        return self._variants[key]
+
+    def available_providers(self) -> list[dict[str, Any]]:
+        return available_providers(self.settings)
 
     # ------------------------------------------------------------------------------------------ #
     def stats(self) -> dict[str, Any]:
@@ -106,7 +115,11 @@ class QAEngine:
             "retrieval": self.retriever.mode,
             "embedding_model": self.settings.embedding_model if self.retriever.dense else None,
             "reranker": self.settings.reranker_model or None,
-            "llm": {"mode": "llm" if self.llm else "extractive", "model": self.llm.model if self.llm else None},
+            "llm": {
+                "mode": "llm" if self.llm else "extractive",
+                "provider": self.llm.provider if self.llm else "extractive",
+                "model": self.llm.model if self.llm else None,
+            },
         }
 
     def get_provision(self, provision_id: str) -> Provision | None:
@@ -179,17 +192,17 @@ class QAEngine:
 
         standalone = self._standalone_question(question, history)
         result = self.retriever.retrieve(standalone, k=top_k, candidate_k=self.settings.candidate_k)
-        sources = self._to_sources(result, top_k)
-        yield {"type": "sources", "sources": [s.to_dict() for s in sources], "standalone_question": standalone}
-
-        answer = Answer(question=question, answer="", sources=sources, standalone_question=standalone)
         off_topic = (
             not result.references
             and result.best_dense_similarity is not None
             and result.best_dense_similarity < self.settings.min_relevance
         )
+        sources = [] if off_topic else self._to_sources(result, top_k)
+        yield {"type": "sources", "sources": [s.to_dict() for s in sources], "standalone_question": standalone}
+
+        answer = Answer(question=question, answer="", sources=sources, standalone_question=standalone)
         if off_topic:
-            answer.mode, answer.answer, answer.sources = "out_of_scope", prompts.OUT_OF_SCOPE_ANSWER, []
+            answer.mode, answer.answer = "out_of_scope", prompts.OUT_OF_SCOPE_ANSWER
             yield {"type": "delta", "text": answer.answer}
         elif self.llm is None:
             answer.mode = "extractive"

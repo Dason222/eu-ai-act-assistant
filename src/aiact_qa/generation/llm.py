@@ -45,6 +45,8 @@ def _usage(message: Any) -> dict[str, Any]:
 
 
 class ClaudeLLM:
+    provider = "anthropic"
+
     def __init__(
         self,
         model: str = "claude-opus-5-5",

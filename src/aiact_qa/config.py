@@ -37,10 +37,13 @@ class Settings(BaseSettings):
     # question is treated as out of scope and answered without calling the LLM.
     min_relevance: float = 0.55
 
-    # --- Generation (Anthropic Claude) ------------------------------------------------------------
-    llm_provider: str = "anthropic"     # "anthropic" | "extractive" (offline, no LLM)
-    llm_model: str = "claude-opus-5-5"
-    llm_effort: str = "medium"          # low | medium | high | xhigh | max
+    # --- Generation (provider-agnostic, see generation/providers.py) --------------------------------
+    # anthropic | openai | azure_openai | mistral | ollama | openai_compatible | extractive
+    llm_provider: str = "anthropic"
+    llm_model: str = ""                 # empty = provider default (Claude: claude-opus-5-5)
+    llm_base_url: str = ""              # override for ollama / openai_compatible endpoints
+    llm_api_key: str = ""               # key for openai_compatible endpoints
+    llm_effort: str = "medium"          # Claude effort: low | medium | high | xhigh | max
     llm_rewrite_effort: str = "low"     # effort for the short query-rewriting call
     llm_max_tokens: int = 16000
     llm_timeout_s: float = 120.0
