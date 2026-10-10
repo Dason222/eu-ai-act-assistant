@@ -112,7 +112,7 @@ if question:
             st.stop()
         final: dict = {}
 
-        def deltas():  # noqa: ANN202
+        def deltas():
             for event in active.ask_stream(question, history=history, top_k=top_k):
                 if event["type"] == "delta":
                     yield event["text"]

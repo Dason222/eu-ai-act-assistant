@@ -51,7 +51,7 @@ def create_app(engine: Any = None, settings: Settings | None = None) -> FastAPI:
     """App factory; tests inject a fake engine and settings."""
 
     @asynccontextmanager
-    async def lifespan(app: FastAPI):  # noqa: ANN202
+    async def lifespan(app: FastAPI):
         if getattr(app.state, "engine", None) is None:
             from aiact_qa.pipeline import QAEngine
 

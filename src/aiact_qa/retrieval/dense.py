@@ -27,7 +27,7 @@ class DenseIndex:
 
     # -- model -------------------------------------------------------------------------------------
     @property
-    def model(self):  # noqa: ANN201 - fastembed type kept out of the public signature
+    def model(self):
         if self._model is None:
             from fastembed import TextEmbedding
 

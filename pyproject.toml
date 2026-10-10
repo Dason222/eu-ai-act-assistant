@@ -39,11 +39,15 @@ where = ["src"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
+filterwarnings = ["ignore::bs4.XMLParsedAsHTMLWarning"]
 markers = [
     "integration: needs the full regulation snapshot and the local embedding model",
     "live: calls the Anthropic API (needs ANTHROPIC_API_KEY)",
 ]
 
 [tool.ruff]
-line-length = 110
+line-length = 120
 target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B", "SIM"]

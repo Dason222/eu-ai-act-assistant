@@ -12,7 +12,7 @@ from pathlib import Path
 from aiact_qa.config import PROJECT_ROOT, get_settings
 
 
-def get_engine(provider: str | None = None, model: str | None = None):  # noqa: ANN201
+def get_engine(provider: str | None = None, model: str | None = None):
     from aiact_qa.pipeline import QAEngine
 
     return QAEngine.from_settings(get_settings()).for_provider(provider, model)

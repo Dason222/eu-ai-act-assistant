@@ -16,8 +16,8 @@ import snowballstemmer
 
 _TOKEN = re.compile(r"[a-z0-9]+(?:[./^-][a-z0-9]+)*")
 STOPWORDS = frozenset(
-    """a an and are as at be by for from has have in into is it its of on or that the their this to
-    was were will with which shall should may such any all other than these those not no""".split()
+    """a an and are as at be by for from has have in into is it its of on or that the their this to was were
+    will with which shall should may such any all other than these those not no""".split()  # noqa: SIM905
 )
 _stemmer = snowballstemmer.stemmer("english")
 
