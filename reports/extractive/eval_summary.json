@@ -10,7 +10,7 @@
     "must_contain": 0.654,
     "declined": 0.75,
     "resisted": 1.0,
-    "latency_ms": 4.018,
+    "latency_ms": 5.035,
     "errors": 0
   },
   "by_category": {
@@ -24,7 +24,7 @@
       "expected_citation_recall": 1.0,
       "must_contain": 0.0,
       "resisted": 1.0,
-      "latency_ms": 4.5,
+      "latency_ms": 5.0,
       "errors": 0
     },
     "definition": {
@@ -36,7 +36,7 @@
       "citation_precision": 1.0,
       "expected_citation_recall": 1.0,
       "must_contain": 0.857,
-      "latency_ms": 4.143,
+      "latency_ms": 6.143,
       "errors": 0
     },
     "follow_up": {
@@ -60,7 +60,7 @@
       "citation_precision": 1.0,
       "expected_citation_recall": 1.0,
       "must_contain": 1.0,
-      "latency_ms": 3.333,
+      "latency_ms": 3.667,
       "errors": 0
     },
     "gpai": {
@@ -72,7 +72,7 @@
       "citation_precision": 1.0,
       "expected_citation_recall": 1.0,
       "must_contain": 0.5,
-      "latency_ms": 4.25,
+      "latency_ms": 5.75,
       "errors": 0
     },
     "high_risk": {
@@ -84,7 +84,7 @@
       "citation_precision": 1.0,
       "expected_citation_recall": 0.5,
       "must_contain": 0.222,
-      "latency_ms": 4.167,
+      "latency_ms": 4.5,
       "errors": 0
     },
     "obligation": {
@@ -96,7 +96,7 @@
       "citation_precision": 1.0,
       "expected_citation_recall": 0.846,
       "must_contain": 0.692,
-      "latency_ms": 4.077,
+      "latency_ms": 5.769,
       "errors": 0
     },
     "out_of_scope": {
@@ -115,7 +115,7 @@
       "citation_precision": 1.0,
       "expected_citation_recall": 1.0,
       "must_contain": 0.333,
-      "latency_ms": 4.0,
+      "latency_ms": 5.0,
       "errors": 0
     },
     "prohibition": {
@@ -127,7 +127,7 @@
       "citation_precision": 1.0,
       "expected_citation_recall": 1.0,
       "must_contain": 0.733,
-      "latency_ms": 4.4,
+      "latency_ms": 5.0,
       "errors": 0
     },
     "scope": {
@@ -139,7 +139,7 @@
       "citation_precision": 1.0,
       "expected_citation_recall": 1.0,
       "must_contain": 1.0,
-      "latency_ms": 3.5,
+      "latency_ms": 4.0,
       "errors": 0
     },
     "timeline": {
@@ -151,7 +151,7 @@
       "citation_precision": 1.0,
       "expected_citation_recall": 0.5,
       "must_contain": 1.0,
-      "latency_ms": 3.0,
+      "latency_ms": 4.0,
       "errors": 0
     },
     "transparency": {
@@ -163,7 +163,7 @@
       "citation_precision": 1.0,
       "expected_citation_recall": 1.0,
       "must_contain": 0.667,
-      "latency_ms": 4.0,
+      "latency_ms": 5.0,
       "errors": 0
     }
   },
