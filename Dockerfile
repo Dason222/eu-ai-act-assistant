@@ -10,7 +10,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     AIACT_MODEL_CACHE_DIR=/app/models
 
 WORKDIR /app
-COPY pyproject.toml README.md ./
+COPY pyproject.toml ./
 COPY src ./src
 RUN pip install .
 
@@ -25,7 +25,7 @@ RUN useradd --create-home --uid 10001 aiact && chown -R aiact /app
 USER aiact
 
 # Default process = the chat UI on $PORT (8501 if unset), so the image also runs on single-port platforms
-# (PaaS, AODE portal). docker-compose.yml starts the REST API from the same image with its own command.
+# (PaaS, AODE portal). The REST API can also run from the same image using its CLI.
 ENV PORT=8501
 EXPOSE 8000 8501
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s CMD python -c \

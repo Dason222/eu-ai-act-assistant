@@ -3,10 +3,8 @@
 **/__pycache__
 .pytest_cache
 .ruff_cache
+.env
 data/processed
 data/index
 data/feedback
 reports
-notebooks
-docs
-.env

@@ -6,7 +6,6 @@ build-backend = "setuptools.build_meta"
 name = "aiact-qa"
 version = "0.1.0"
 description = "Natural-language Q&A over the EU AI Act (Regulation (EU) 2024/1689): structure-aware RAG with cited, grounded answers."
-readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
 dependencies = [
@@ -28,7 +27,6 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8", "ruff>=0.6"]
-notebook = ["jupyter>=1.0", "nbconvert>=7", "ipykernel>=6", "matplotlib>=3.8", "pandas>=2.1"]
 
 [project.scripts]
 aiact-qa = "aiact_qa.cli:main"
@@ -48,8 +46,6 @@ markers = [
 [tool.ruff]
 line-length = 120
 target-version = "py311"
-# the walkthrough notebook is demo code (one-liners, imports per cell); the package, app, tests and scripts are linted
-extend-exclude = ["notebooks"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B", "SIM"]
