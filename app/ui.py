@@ -62,10 +62,15 @@ state = st.session_state
 password = os.getenv("AIACT_UI_PASSWORD", "")
 if password and not state.get("authenticated"):
     st.title("EU AI Act Assistant")
-    entered = st.text_input("Access code", type="password")
-    if st.button("Unlock") and hmac.compare_digest(entered, password):
+    with st.form("unlock"):
+        entered = st.text_input("Password", type="password")
+        submitted = st.form_submit_button("Unlock")
+    # bytes, not str: compare_digest raises TypeError on non-ASCII strings
+    if submitted and hmac.compare_digest(entered.encode(), password.encode()):
         state.authenticated = True
         st.rerun()
+    if submitted:
+        st.error("Incorrect password.")
     st.stop()
 # Keyed on the visitor's IP (via Traefik), so reloading the page does not reset the quota.
 state.setdefault("budget_identity", "ui-" + client_identity(st.context.headers, secrets.token_hex(8)))
