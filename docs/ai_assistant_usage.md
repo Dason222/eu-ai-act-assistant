@@ -38,12 +38,29 @@ the grounded-answer system prompt, the follow-up condensing prompt and the LLM-a
 |---|---|---|
 | Structural fidelity | Parsed counts vs the Official Journal | 113 articles, 180 recitals, 13 annexes, 68 definitions, 13 chapters – exact |
 | Text fidelity | Manual spot checks of Articles 1, 3, 4, 5, 9, 50, 51, 99, Annexes I, III, VII against EUR-Lex | Two defects found and fixed: 3-column tables in Annexes I/VII were dropped; superscript exponent rendered "1025" instead of "10^25" |
-| Unit/integration tests | `pytest` (23 tests): parser, chunker, references, BM25, citations, engine, Claude and OpenAI-compatible request shapes (mocked clients), API (fake engine), evaluation | all passing |
+| Unit/integration tests | `pytest` (32 tests): parser, chunker, references, BM25, citations, engine, Claude and OpenAI-compatible request shapes (mocked clients), API (fake engine), evaluation | all passing |
 | Golden set integrity | `scripts/verify_golden_set.py`: every expected provision exists and every key fact occurs verbatim | 57/57 valid |
-| Retrieval quality | `compare_retrieval_strategies` on the golden set | hybrid + references best: hit@8 0.98, recall@8 0.96, MRR 0.83 |
-| End-to-end | Executed notebook, CLI and REST API (`/health`, `/ask`, `/ask/stream`, `/provisions`) | working in extractive mode |
-| Static analysis | `ruff` (E, F, W, I, UP, B, SIM) | clean |
-| Not validated here | Live LLM generation (no API key in the build sandbox); Docker image build (no Docker daemon) | run `aiact-qa eval --provider …` and `docker compose build` in the target environment |
+| Retrieval quality | `compare_retrieval_strategies` on the golden set | hybrid + references best: hit@8 0.98, recall@8 0.96, MRR 0.84 |
+| End-to-end | Executed notebook, CLI and REST API (`/health`, `/ask`, `/ask/stream`, `/provisions`) | working in extractive and LLM mode |
+| Live LLM generation | `aiact-qa eval --provider openai --model gpt-5.4-mini` on all 57 questions | 54 LLM answers, 3 refusals, 0 withheld; citation precision 1.00, must-contain 0.91 ([report](../reports/openai-gpt-5.4-mini)) |
+| Static analysis | `ruff` (E, F, W, I, UP, B, SIM) on `src/`, `app/`, `tests/`, `scripts/` (notebook excluded as demo code) | clean |
+| Docker image | Built and run as a single container behind Traefik | live demo deployment |
+
+## What the review of AI-generated code caught
+
+Running the evaluation with a real model and reading individual answers (not only aggregate scores) found
+defects that the unit tests and the extractive-mode metrics did not:
+
+* **Answer validator rejected correct answers.** 23 of 57 LLM answers were withheld: a citation like
+  `[Article 50(5)]` failed against an excerpt labelled `Article 50(4)-(6)` (only range endpoints were parsed), and
+  `[Article 18(1)(a)]` failed against a whole-article excerpt. Fixed and covered by a test; 0 answers withheld after.
+* **Definition boost outranked obligations.** "What are the obligations of providers…?" was boosted towards the
+  Article 3 definition of *provider*; the boost now applies only to "what is X" questions.
+* **Glossary matched substrings**, so "define" triggered the expansion for "fine" (penalties).
+* **Lay wording missed Annex III.** "CV-screening tool" did not retrieve the employment use case; the golden set
+  only passed because it says "screen job applications". Hiring terms were added to the glossary.
+* **Quota counted local evaluation runs**, so an eval stopped after 40 questions with quota errors that looked
+  like retrieval misses.
 
 Human review remains required for: the legal correctness of the golden-set reference answers (SME review), prompt
 wording, and the effort/cost assumptions in `feasibility_and_effort.md`.

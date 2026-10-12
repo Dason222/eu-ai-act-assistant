@@ -48,6 +48,8 @@ markers = [
 [tool.ruff]
 line-length = 120
 target-version = "py311"
+# the walkthrough notebook is demo code (one-liners, imports per cell); the package, app, tests and scripts are linted
+extend-exclude = ["notebooks"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "UP", "B", "SIM"]

@@ -13,6 +13,11 @@ services:
     image: aiact-qa:latest
     restart: unless-stopped
     env_file: .env
+    command: ["uvicorn", "aiact_qa.api:app", "--host", "0.0.0.0", "--port", "8000"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=4)"]
+      interval: 30s
+      timeout: 5s
     environment:
       AIACT_API_KEY: ${AIACT_API_KEY:?Set a strong AIACT_API_KEY in .env}
     volumes:
@@ -37,8 +42,6 @@ services:
     env_file: .env
     environment:
       AIACT_UI_PASSWORD: ${AIACT_UI_PASSWORD:?Set AIACT_UI_PASSWORD in .env}
-    command: ["streamlit", "run", "app/ui.py", "--server.port=8501", "--server.address=0.0.0.0",
-              "--server.headless=true", "--browser.gatherUsageStats=false"]
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8501/_stcore/health', timeout=4)"]
       interval: 30s

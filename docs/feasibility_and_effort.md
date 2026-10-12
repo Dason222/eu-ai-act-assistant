@@ -11,9 +11,9 @@ quality with legal subject-matter experts.
 |---|---|---|
 | Data availability | ✅ High | EUR-Lex publishes structured HTML/XML (Formex) with stable element ids; Cellar offers SPARQL + REST for metadata, versions and languages. Reuse of EUR-Lex content is authorised with acknowledgement of the source (Commission Decision 2011/833/EU). |
 | Parsing quality | ✅ High | Structure-aware parser reproduces the OJ structure exactly (113 articles, 180 recitals, 13 annexes, 68 definitions); one markup issue (superscript exponents) found and fixed via the notebook review. |
-| Retrieval quality | ✅ Good | Golden set (49 answerable questions): hit@8 0.98, recall@8 0.96, MRR 0.83. Gaps: multi-hop questions. |
-| Answer quality | ⚠️ To be measured per provider | Harness ready (citation precision, expected-citation recall, must-contain facts, LLM judge); needs API keys and an SME-reviewed golden set for acceptance criteria. |
-| Cost | ✅ Low | ≈ $0.02 per question with Claude Opus 5.5 (cheaper tiers available); retrieval runs on CPU. |
+| Retrieval quality | ✅ Good | Golden set (49 answerable questions): hit@8 0.98, recall@8 0.96, MRR 0.84. Gaps: multi-hop questions. |
+| Answer quality | ✅ Promising, ⚠️ needs SME sign-off | Measured with OpenAI `gpt-5.4-mini` on 57 questions: citation precision 1.00, expected-citation recall 0.96, must-contain facts 0.91, all out-of-scope and injection probes handled. Acceptance criteria need an SME-reviewed golden set; other providers are compared with the same harness. |
+| Cost | ✅ Low | ≈ $0.02 per question with Claude Opus 5.5 (estimate); measured with `gpt-5.4-mini`: ≈ 4.3k input + 0.26k output tokens per question, i.e. well under a cent. Retrieval runs on CPU. |
 | Data residency / sovereignty | ✅ Options exist | EU-hosted options: Azure OpenAI EU regions, Mistral (EU), Claude via cloud platforms with EU regions, or self-hosted open-weights models (Ollama/vLLM) – all behind the same interface. |
 | Regulatory exposure | ⚠️ Manage | The assistant itself is an AI system interacting with people (AI Act Art. 50 transparency); must be positioned as information, not legal advice. |
 
@@ -82,7 +82,7 @@ pilot.
 
 ## 5. Running cost model (monthly, indicative)
 
-LLM cost per question from the notebook measurement (2.9k cached system tokens, ~2–5k context tokens, ~600 output
+LLM cost per question, estimated from prompt sizes in the notebook (2.9k cached system tokens, ~2–5k context tokens, ~600 output
 tokens; Anthropic list prices: Opus 5.5 $4/$20 per MTok input/output, cached input $0.20; Sonnet 5.5 $2/$10;
 Haiku 5.5 $0.10/$0.50). Follow-up questions add one small rewriting call.
 
