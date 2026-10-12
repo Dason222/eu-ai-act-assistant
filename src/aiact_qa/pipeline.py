@@ -240,6 +240,8 @@ class QAEngine:
                 for _ in self.llm.stream(self._system, messages, llm_result):
                     pass
                 answer.answer, answer.model, answer.usage = tidy(llm_result.text), llm_result.model, llm_result.usage
+                if prompts.OUT_OF_SCOPE_MARKER in answer.answer:
+                    answer.mode, answer.answer = "out_of_scope", prompts.OUT_OF_SCOPE_ANSWER
                 if llm_result.refused:
                     answer.mode = "refused"
                     answer.answer = answer.answer or "The model declined to answer this request."
