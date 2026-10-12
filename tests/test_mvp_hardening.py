@@ -8,7 +8,12 @@ from aiact_qa.budget import BudgetExceeded, UsageBudget
 from aiact_qa.config import Settings
 from aiact_qa.generation.citations import extract_citations
 from aiact_qa.pipeline import QAEngine
-from aiact_qa.retrieval.hybrid import HybridRetriever, definition_subject, expand_query
+from aiact_qa.retrieval.hybrid import (
+    HybridRetriever,
+    definition_subject,
+    expand_query,
+    is_timing_question,
+)
 from aiact_qa.schemas import Source
 
 
@@ -107,3 +112,12 @@ def test_citations_become_paragraph_links(regulation):
     assert "[Annex III, point 4(a)](https://eur-lex.example/eng#anx_III)" in linked
     assert not linked.rstrip().endswith("*")
     assert tidy("- real point\n* \n- another") == "- real point\n- another"
+
+
+def test_timing_questions_retrieve_article_113(chunks):
+    assert is_timing_question("When do the bans on prohibited AI practices apply?")
+    assert is_timing_question("What is the application date for GPAI obligations?")
+    assert not is_timing_question("When is an AI system high-risk?")
+    retriever = HybridRetriever(chunks, dense=None)
+    hits = retriever.retrieve("When do the bans on prohibited AI practices apply?", k=8).hits
+    assert hits[0].chunk.provision_id == "art_113"

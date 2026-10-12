@@ -83,6 +83,20 @@ def definition_subject(query: str) -> str:
     return q if 0 < len(q.split()) <= 6 else ""
 
 
+# Application dates live only in Article 113; a topical query ("when do the bans apply?") ranks
+# Article 5 and Recital 179 above it, so timing questions pull Article 113 in explicitly.
+_TIMING = re.compile(
+    r"\b(?:when|from\s+what\s+date|by\s+what\s+date)\b.*\b(?:appl(?:y|ies|icable|ication)|start|"
+    r"begin|enter|in\s+force|take\s+effect|kick\s+in)\b|\b(?:application|applicability)\s+date|"
+    r"\bentry\s+into\s+force\b|\bdeadlines?\b|\btimeline\b",
+    re.I,
+)
+
+
+def is_timing_question(query: str) -> bool:
+    return bool(_TIMING.search(query))
+
+
 def _term_forms(term: str) -> set[str]:
     return {term, term + "s", term.removesuffix("s")}
 
@@ -197,6 +211,12 @@ class HybridRetriever:
                     hit.score += 2
                     if "exact_definition" not in hit.retrievers:
                         hit.retrievers.append("exact_definition")
+        if is_timing_question(query):
+            for idx in self._by_provision.get("art_113", []):
+                hit = fused.setdefault(idx, Hit(self.chunks[idx], 0.0))
+                hit.score += 1
+                if "application_dates" not in hit.retrievers:
+                    hit.retrievers.append("application_dates")
         hits = sorted(fused.values(), key=lambda h: -h.score)
         if self._reranker_model:
             hits = self._rerank(query, hits[: max(k * 3, 20)])
