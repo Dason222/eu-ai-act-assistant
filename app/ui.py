@@ -90,8 +90,9 @@ def provider_label(p: dict) -> str:
 with st.sidebar:
     st.markdown("**EU AI Act Assistant**")
     st.markdown(
-        f'<p class="muted">Answers come only from the text of <a href="{ELI_URL}">Regulation (EU) 2024/1689</a> '
-        "as published in the Official Journal. Every claim links to the paragraph it relies on.</p>",
+        f'<p class="muted">Answers draw on retrieved passages from <a href="{ELI_URL}">Regulation (EU) 2024/1689</a> '
+        "as published in the Official Journal. References identify supporting provisions, "
+        "but do not guarantee legal accuracy.</p>",
         unsafe_allow_html=True,
     )
     if st.button("New conversation", icon=":material/add:", use_container_width=True):
@@ -176,7 +177,7 @@ st.title("EU AI Act Assistant")
 if not state.messages and not question:
     st.markdown(
         '<p class="lede">Ask about obligations, prohibited practices, high-risk systems or penalties under '
-        "Regulation (EU) 2024/1689. Answers use only the official text and link every claim to its source.</p>",
+        "Regulation (EU) 2024/1689. Answers draw on retrieved provisions and link to the official EUR-Lex text.</p>",
         unsafe_allow_html=True,
     )
     left, right = st.columns(2)

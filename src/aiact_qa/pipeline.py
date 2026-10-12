@@ -5,7 +5,7 @@ Flow per question:
   2. follow-up / non-English questions are rewritten into a standalone English query (LLM, cheap)
   3. hybrid retrieval: explicit legal references + BM25 + dense embeddings, fused with RRF
   4. relevance gate: clearly off-topic questions are answered without calling the LLM
-  5. grounded generation with Claude (streamed), citing provisions as [Article 6(2)]
+  5. grounded generation with the configured LLM, citing provisions as [Article 6(2)]
   6. citation validation against the retrieved sources + deep links to EUR-Lex
 """
 
