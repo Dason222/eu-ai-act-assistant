@@ -15,6 +15,7 @@ COPY src ./src
 RUN pip install .
 
 COPY app ./app
+COPY .streamlit ./.streamlit
 COPY data/raw ./data/raw
 COPY data/eval ./data/eval
 # parse + chunk + embed from the versioned EUR-Lex snapshot (downloads the ~130 MB ONNX model once)

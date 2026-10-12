@@ -45,6 +45,14 @@ def looks_english(text: str) -> bool:
     return non_ascii < 0.1 and bool(_ENGLISH_HINTS.search(text))
 
 
+_EMPTY_BULLET = re.compile(r"(?m)^[ \t]*[-*\u2022][ \t]*$\n?")
+
+
+def tidy(text: str) -> str:
+    """Drop empty list items ("* " on its own line) that models sometimes emit at the end."""
+    return _EMPTY_BULLET.sub("", text).strip()
+
+
 class QAEngine:
     def __init__(
         self,
@@ -60,6 +68,7 @@ class QAEngine:
         self.llm = llm
         self.settings = settings
         self._provisions = regulation.by_id()
+        self._anchors = {p.anchor for a in regulation.articles for p in a.paragraphs if p.anchor}
         self._system = prompts.system_blocks(regulation)
         self._variants: dict[tuple[str, str], QAEngine] = {}
         self.budget = UsageBudget(settings.feedback_path.parent / "usage_budget.sqlite3", settings)
@@ -230,7 +239,7 @@ class QAEngine:
                 # Buffer model output; streaming unvalidated claims would leak before checks.
                 for _ in self.llm.stream(self._system, messages, llm_result):
                     pass
-                answer.answer, answer.model, answer.usage = llm_result.text, llm_result.model, llm_result.usage
+                answer.answer, answer.model, answer.usage = tidy(llm_result.text), llm_result.model, llm_result.usage
                 if llm_result.refused:
                     answer.mode = "refused"
                     answer.answer = answer.answer or "The model declined to answer this request."
@@ -241,7 +250,7 @@ class QAEngine:
                 answer.mode = "extractive"
                 answer.warnings.append(f"LLM unavailable ({exc}); showing the retrieved provisions instead.")
                 answer.answer = self._extractive_answer(sources, "The language model is unavailable.")
-        answer.citations = extract_citations(answer.answer, answer.sources)
+        answer.citations = extract_citations(answer.answer, answer.sources, self._anchors)
         if answer.mode == "llm":
             missing = not answer.citations and not prompts.DECLINE.search(answer.answer)
             warning = unverified_warning(answer.citations)
@@ -252,7 +261,7 @@ class QAEngine:
                 )
                 answer.mode = "extractive"
                 answer.answer = self._extractive_answer(sources, "Answer validation did not pass.")
-                answer.citations = extract_citations(answer.answer, answer.sources)
+                answer.citations = extract_citations(answer.answer, answer.sources, self._anchors)
         if warning := unverified_warning(answer.citations):
             answer.warnings.append(warning)
         # The only user-visible delta is the post-validation answer.
