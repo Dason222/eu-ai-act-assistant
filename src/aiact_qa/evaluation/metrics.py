@@ -5,13 +5,8 @@ from __future__ import annotations
 import re
 
 from aiact_qa.evaluation.dataset import EvalItem, normalise
+from aiact_qa.generation.prompts import DECLINE
 from aiact_qa.schemas import Answer
-
-DECLINE = re.compile(
-    r"only answer questions about|not (?:covered|addressed|contain)|outside (?:the )?scope|"
-    r"does not (?:seem to )?relate|cannot help with|do not contain|don't contain|no information",
-    re.I,
-)
 
 
 def retrieval_metrics(item: EvalItem, ranked_provisions: list[str], k: int) -> dict[str, float]:

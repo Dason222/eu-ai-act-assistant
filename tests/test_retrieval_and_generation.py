@@ -170,3 +170,6 @@ def test_provider_catalogue(tmp_path, monkeypatch):
     monkeypatch.setenv("MISTRAL_API_KEY", "test")
     llm = make_llm(settings, provider="mistral")
     assert llm.model == "mistral-large-latest" and str(llm.client.base_url).startswith("https://api.mistral.ai")
+    # the configured model belongs to the configured provider, never to another one
+    other = settings.model_copy(update={"llm_provider": "openai", "llm_model": "gpt-5.4-mini"})
+    assert make_llm(other, provider="mistral").model == "mistral-large-latest"

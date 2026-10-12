@@ -6,6 +6,8 @@ prompt-cached; everything request-specific (excerpts, question) goes into the us
 
 from __future__ import annotations
 
+import re
+
 from aiact_qa.models import Regulation
 from aiact_qa.schemas import Source
 
@@ -42,6 +44,14 @@ Rewrite the user's latest message into a single standalone search query in Engli
 AI Act (Regulation (EU) 2024/1689). Resolve pronouns and ellipses using the conversation, keep \
 explicit references such as "Article 6(2)" or "Annex III" and legal terms unchanged, and do not \
 answer the question. Output only the rewritten query, nothing else."""
+
+# A refusal or "the excerpts do not say" answer; it legitimately carries no citations.
+DECLINE = re.compile(
+    r"only answer questions about|not (?:covered|addressed|contain)|outside (?:the )?scope|"
+    r"does not (?:seem to )?relate|cannot (?:help with|determine)|do not contain|don't contain|"
+    r"no information|not enough information|insufficient information",
+    re.I,
+)
 
 OUT_OF_SCOPE_ANSWER = (
     "I can only answer questions about the EU Artificial Intelligence Act (Regulation (EU) "

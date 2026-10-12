@@ -11,18 +11,31 @@ from aiact_qa.schemas import Citation, Source
 _BRACKETS = re.compile(r"\[([^\[\]]{3,80})\]")
 
 
+_LABEL_PARAGRAPHS = re.compile(r"^Article \d+\s*\((\d+)\)(?:\([a-z]+\))?(?:-\((\d+)\))?")
+
+
+def covered_paragraphs(label: str) -> set[str] | None:
+    """Paragraphs an excerpt label covers: "Article 50(4)-(6)" -> {4, 5, 6}, "Article 5(1)(a)-(b)" -> {1};
+    None when the label names the whole provision ("Article 18", "Recital 27", annex points)."""
+    m = _LABEL_PARAGRAPHS.match(label)
+    if not m:
+        return None
+    first, last = int(m.group(1)), int(m.group(2) or m.group(1))
+    return {str(n) for n in range(first, last + 1)}
+
+
 def extract_citations(answer: str, sources: list[Source]) -> list[Citation]:
     """Every bracketed provision reference, verified against the sources given to the model."""
     # Source-level presence is not enough: verify the cited paragraph was
     # actually sent to the model, rather than merely present in the act.
     available = {s.provision_id for s in sources}
-    covered = {}
+    covered: dict[str, set[str] | None] = {}  # None = the whole provision was sent
     for s in sources:
-        covered.setdefault(s.provision_id, set()).update(
-            re.findall(r"\((\d+)\)", s.label)
-        )
-        if s.kind == "definition":
-            covered[s.provision_id].update(re.findall(r"\((\d+)\)", s.label))
+        paragraphs = covered_paragraphs(s.label)
+        if paragraphs is None or covered.get(s.provision_id, set()) is None:
+            covered[s.provision_id] = None
+        else:
+            covered.setdefault(s.provision_id, set()).update(paragraphs)
     urls = {s.provision_id: s.url.split("#")[0] + "#" + s.provision_id for s in sources}
     citations: list[Citation] = []
     seen: set[tuple[str, str]] = set()
@@ -40,7 +53,8 @@ def extract_citations(answer: str, sources: list[Source]) -> list[Citation]:
                     url=urls.get(ref.provision_id, f"{ELI_URL}#{ref.provision_id}"),
                     verified=(
                         ref.provision_id in available
-                        and (not ref.paragraph or ref.paragraph in covered.get(ref.provision_id, set())
+                        and (not ref.paragraph or covered.get(ref.provision_id) is None
+                             or ref.paragraph in covered[ref.provision_id]
                              or any(s.provision_id == ref.provision_id and s.label == ref.text for s in sources))
                     ),
                 )

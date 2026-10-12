@@ -176,7 +176,9 @@ def make_llm(settings: Settings, provider: str | None = None, model: str | None 
         return None
     if not _is_configured(info, settings):
         raise ValueError(f"LLM provider '{provider}' is not configured (missing credentials or base URL)")
-    model = model or settings.llm_model or info.default_model
+    # AIACT_LLM_MODEL names a model of the configured provider; another provider gets its own default
+    configured_model = settings.llm_model if provider == (settings.llm_provider or "").lower() else ""
+    model = model or configured_model or info.default_model
 
     if provider == "anthropic":
         llm = ClaudeLLM(

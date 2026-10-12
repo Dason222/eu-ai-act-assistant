@@ -77,3 +77,15 @@ def test_local_callers_bypass_quota(tmp_path: Path, regulation, chunks):
     engine.ask("Which AI practices are prohibited?", identity="visitor")
     with pytest.raises(BudgetExceeded):
         engine.ask("Which AI practices are prohibited?", identity="visitor")
+
+
+def test_paragraph_ranges_and_whole_articles_verify():
+    def src(label, pid):
+        return Source(1, pid, pid, "article", label, "", "", "https://example.test/#" + pid)
+    sources = [src("Article 50(4)-(6)", "art_50"), src("Article 18", "art_18"), src("Article 5(1)(a)-(b)", "art_5")]
+    cited = extract_citations("[Article 50(5)] [Article 18(1)(a)] [Article 5(1)(b)] [Article 50(7)] [Article 5(2)]",
+                              sources)
+    assert [(c.text, c.verified) for c in cited] == [
+        ("Article 50(5)", True), ("Article 18(1)(a)", True), ("Article 5(1)(b)", True),
+        ("Article 50(7)", False), ("Article 5(2)", False),
+    ]

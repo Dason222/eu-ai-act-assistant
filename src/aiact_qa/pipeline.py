@@ -243,10 +243,7 @@ class QAEngine:
                 answer.answer = self._extractive_answer(sources, "The language model is unavailable.")
         answer.citations = extract_citations(answer.answer, answer.sources)
         if answer.mode == "llm":
-            missing = not answer.citations and not any(
-                p in answer.answer.lower() for p in ("cannot determine", "not enough information",
-                    "do not contain", "don't contain", "insufficient information")
-            )
+            missing = not answer.citations and not prompts.DECLINE.search(answer.answer)
             warning = unverified_warning(answer.citations)
             if missing or warning or not answer.answer.strip():
                 answer.warnings.append(
