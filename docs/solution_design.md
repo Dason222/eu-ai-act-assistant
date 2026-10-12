@@ -84,8 +84,8 @@ architecture). Previews: [`architecture.png`](architecture.png), [`architecture_
 | Index build | ~50 s on CPU (parse < 1 s, embeddings dominate) |
 | Engine start | ~1.5 s (loads JSON + vectors, builds BM25) |
 | Retrieval latency | 5–15 ms per query (CPU) |
-| LLM latency | measured with OpenAI `gpt-5.4-mini` on the 57-question golden set: 1.9 s mean per answer, including the validation step |
-| Cost per question | measured with `gpt-5.4-mini`: ≈ 4.5k input + 0.26k output tokens per answer; estimates for Claude Opus 5.5 ≈ $0.02 (2.9k cached system tokens, ~2–5k context tokens, ~600 output tokens); Sonnet 5.5 ≈ $0.01; Haiku 5.5 ≈ $0.0005 |
+| LLM latency | measured with OpenAI `gpt-5.4-mini` on the 57-question golden set: 2.0 s mean per answer, including the validation step |
+| Cost per question | measured with `gpt-5.4-mini`: ≈ 4.6k input + 0.24k output tokens per answer; estimates for Claude Opus 5.5 ≈ $0.02 (2.9k cached system tokens, ~2–5k context tokens, ~600 output tokens); Sonnet 5.5 ≈ $0.01; Haiku 5.5 ≈ $0.0005 |
 | Footprint | one container, ~1 GB RAM, no database |
 
 ## 6. Target production design (page 2 of the diagram)
