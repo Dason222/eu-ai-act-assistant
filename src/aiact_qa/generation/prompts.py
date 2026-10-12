@@ -65,9 +65,11 @@ no "If you want, I can…", no follow-up questions to the user.
 
 CONDENSE_INSTRUCTIONS = """\
 Rewrite the user's latest message into a single standalone search query in English about the EU \
-AI Act (Regulation (EU) 2024/1689). Resolve pronouns and ellipses using the conversation, keep \
-explicit references such as "Article 6(2)" or "Annex III" and legal terms unchanged, and do not \
-answer the question. Output only the rewritten query, nothing else."""
+AI Act. If the message is already a complete question on its own, return it unchanged (translated \
+to English if needed); do not add topics from earlier turns. Otherwise resolve pronouns and \
+ellipses using the conversation. Keep explicit references such as "Article 6(2)" or "Annex III" \
+and legal terms unchanged, do not add the name or number of the regulation, and do not answer the \
+question. Output only the rewritten query, nothing else."""
 
 # A refusal or "the excerpts do not say" answer; it legitimately carries no citations.
 DECLINE = re.compile(

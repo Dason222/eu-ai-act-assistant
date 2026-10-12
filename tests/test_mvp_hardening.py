@@ -13,6 +13,7 @@ from aiact_qa.retrieval.hybrid import (
     definition_subject,
     expand_query,
     is_timing_question,
+    strip_act_name,
 )
 from aiact_qa.schemas import Source
 
@@ -130,3 +131,12 @@ def test_non_existent_provisions_lose_their_brackets():
         "I cannot cite Article 999; see [Article 5(1)(a)] and Annex XV, not [Article 5, Article 999]."
     )
     assert unbracket_missing("[OUT_OF_SCOPE]") == "[OUT_OF_SCOPE]"
+
+
+def test_act_name_does_not_steer_retrieval(chunks):
+    query = "What is a deployer under the EU AI Act (Regulation (EU) 2024/1689)?"
+    assert strip_act_name(query) == "What is a deployer?"
+    assert strip_act_name("What is the AI Act?") == "What is the AI Act?"
+    retriever = HybridRetriever(chunks, dense=None)
+    hits = retriever.retrieve("What is a deployer under Regulation (EU) 2024/1689 (the EU AI Act)?", k=8).hits
+    assert hits[0].chunk.label == "Article 3(4)"
