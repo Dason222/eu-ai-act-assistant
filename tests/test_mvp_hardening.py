@@ -96,19 +96,18 @@ def test_paragraph_ranges_and_whole_articles_verify():
     ]
 
 
-def test_citations_become_paragraph_links(regulation):
+def test_citations_link_to_the_provision():
     from aiact_qa.generation.citations import link_citations
     from aiact_qa.pipeline import tidy
 
-    anchors = {p.anchor for a in regulation.articles for p in a.paragraphs if p.anchor}
     def src(label, pid):
         return Source(1, pid, pid, "article", label, "", "", "https://eur-lex.example/eng#" + pid)
     sources = [src("Article 5(1)(f)", "art_5"), src("Article 50(3)", "art_50"), src("Annex III, point 4", "anx_III")]
     text = "Prohibited [Article 5(1)(f)]; see [Article 50(3)] and [Annex III, point 4(a)].\n\n* \n"
-    cited = extract_citations(text, sources, anchors)
-    assert [c.url.split("#")[1] for c in cited] == ["005.001", "050.003", "anx_III"]
+    cited = extract_citations(text, sources)
+    assert [c.url.split("#")[1] for c in cited] == ["art_5", "art_50", "anx_III"]
     linked = link_citations(tidy(text), cited)
-    assert "[Article 5(1)(f)](https://eur-lex.example/eng#005.001)" in linked
+    assert "[Article 5(1)(f)](https://eur-lex.example/eng#art_5)" in linked
     assert "[Annex III, point 4(a)](https://eur-lex.example/eng#anx_III)" in linked
     assert not linked.rstrip().endswith("*")
     assert tidy("- real point\n* \n- another") == "- real point\n- another"

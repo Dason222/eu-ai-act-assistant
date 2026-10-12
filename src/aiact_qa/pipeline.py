@@ -68,7 +68,6 @@ class QAEngine:
         self.llm = llm
         self.settings = settings
         self._provisions = regulation.by_id()
-        self._anchors = {p.anchor for a in regulation.articles for p in a.paragraphs if p.anchor}
         self._system = prompts.system_blocks(regulation)
         self._variants: dict[tuple[str, str], QAEngine] = {}
         self.budget = UsageBudget(settings.feedback_path.parent / "usage_budget.sqlite3", settings)
@@ -252,7 +251,7 @@ class QAEngine:
                 answer.mode = "extractive"
                 answer.warnings.append(f"LLM unavailable ({exc}); showing the retrieved provisions instead.")
                 answer.answer = self._extractive_answer(sources, "The language model is unavailable.")
-        answer.citations = extract_citations(answer.answer, answer.sources, self._anchors)
+        answer.citations = extract_citations(answer.answer, answer.sources)
         if answer.mode == "llm":
             missing = not answer.citations and not prompts.DECLINE.search(answer.answer)
             warning = unverified_warning(answer.citations)
@@ -263,7 +262,7 @@ class QAEngine:
                 )
                 answer.mode = "extractive"
                 answer.answer = self._extractive_answer(sources, "Answer validation did not pass.")
-                answer.citations = extract_citations(answer.answer, answer.sources, self._anchors)
+                answer.citations = extract_citations(answer.answer, answer.sources)
         if warning := unverified_warning(answer.citations):
             answer.warnings.append(warning)
         # The only user-visible delta is the post-validation answer.

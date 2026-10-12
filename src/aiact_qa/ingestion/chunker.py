@@ -99,14 +99,13 @@ def _article_chunks(article: Provision, max_words: int) -> list[Chunk]:
             label = f"{article.label}({numbers[0]})"
         else:
             label = f"{article.label}({numbers[0]})-({numbers[-1]})"
-        anchor = group[0].anchor or article.id
         chunks.append(
             Chunk(
                 id=f"{article.id}#{numbers[0] if numbers else len(chunks)}",
                 label=label,
                 text="\n".join(p.text for p in group),
                 paragraphs=numbers,
-                **{**base, "url": f"{article.url.split('#')[0]}#{anchor}"},
+                **base,
             )
         )
         group.clear()
@@ -126,7 +125,7 @@ def _article_chunks(article: Provision, max_words: int) -> list[Chunk]:
                         label=label,
                         text=piece,
                         paragraphs=[number] if number else [],
-                        **{**base, "url": f"{article.url.split('#')[0]}#{paragraph.anchor or article.id}"},
+                        **base,
                     )
                 )
             continue

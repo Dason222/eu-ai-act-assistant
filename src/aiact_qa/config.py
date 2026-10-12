@@ -12,6 +12,10 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 # Canonical identifiers of the regulation covered by the prototype.
 CELEX = "32024R1689"
 ELI_URL = "https://eur-lex.europa.eu/eli/reg/2024/1689/oj/eng"
+# Citation links. On a fresh page load neither the ELI page nor the standard EUR-Lex page scrolls to a
+# fragment; this rendition does for provision ids (art_23, rct_179, anx_III). Paragraph ids such as
+# 023.001 do not scroll on any EUR-Lex rendition, so links stop at the provision.
+LINK_URL = f"https://eur-lex.europa.eu/legal-content/EN/TXT/HTML/?uri=CELEX:{CELEX}"
 # Document-only HTML rendition of the Official Journal publication (same element ids as the ELI page).
 OJ_HTML_URL = "https://eur-lex.europa.eu/legal-content/EN/TXT/HTML/?uri=OJ:L_202401689"
 REGULATION_NAME = "Regulation (EU) 2024/1689 (Artificial Intelligence Act)"

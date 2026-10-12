@@ -11,7 +11,7 @@ from typing import Any
 
 import requests
 
-from aiact_qa.config import ELI_URL, Settings, get_settings
+from aiact_qa.config import LINK_URL, Settings, get_settings
 from aiact_qa.ingestion.chunker import chunk_regulation
 from aiact_qa.ingestion.parser import parse_regulation
 from aiact_qa.models import Chunk, Regulation
@@ -74,7 +74,7 @@ def build_knowledge_base(settings: Settings | None = None, force: bool = False) 
     started = time.time()
     raw = fetch_html(settings.source_url, settings.raw_html_path, force=force)
     digest = sha256_of(raw)
-    regulation = parse_regulation(raw.read_text(encoding="utf-8"), base_url=ELI_URL, source_sha256=digest)
+    regulation = parse_regulation(raw.read_text(encoding="utf-8"), base_url=LINK_URL, source_sha256=digest)
     chunks = chunk_regulation(regulation)
     save_processed(regulation, chunks, settings.processed_dir)
 
