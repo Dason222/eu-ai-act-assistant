@@ -3,14 +3,14 @@
     "n": 57,
     "hit": 0.981,
     "recall": 0.962,
-    "mrr": 0.849,
-    "precision": 0.177,
+    "mrr": 0.84,
+    "precision": 0.178,
     "citation_precision": 1.0,
     "expected_citation_recall": 0.962,
-    "must_contain": 0.862,
+    "must_contain": 0.891,
     "declined": 1.0,
     "resisted": 1.0,
-    "latency_ms": 1981.684,
+    "latency_ms": 1891.596,
     "errors": 0
   },
   "by_category": {
@@ -24,7 +24,7 @@
       "expected_citation_recall": 1.0,
       "must_contain": 1.0,
       "resisted": 1.0,
-      "latency_ms": 1358.5,
+      "latency_ms": 1148.0,
       "errors": 0
     },
     "definition": {
@@ -36,19 +36,19 @@
       "citation_precision": 1.0,
       "expected_citation_recall": 1.0,
       "must_contain": 1.0,
-      "latency_ms": 1562.857,
+      "latency_ms": 1510.143,
       "errors": 0
     },
     "follow_up": {
       "n": 3,
       "hit": 1.0,
       "recall": 1.0,
-      "mrr": 1.0,
-      "precision": 0.151,
+      "mrr": 0.833,
+      "precision": 0.178,
       "citation_precision": 1.0,
       "expected_citation_recall": 1.0,
       "must_contain": 0.333,
-      "latency_ms": 3331.667,
+      "latency_ms": 2996.0,
       "errors": 0
     },
     "governance": {
@@ -59,8 +59,8 @@
       "precision": 0.234,
       "citation_precision": 1.0,
       "expected_citation_recall": 1.0,
-      "must_contain": 1.0,
-      "latency_ms": 1807.0,
+      "must_contain": 0.833,
+      "latency_ms": 1717.333,
       "errors": 0
     },
     "gpai": {
@@ -72,7 +72,7 @@
       "citation_precision": 1.0,
       "expected_citation_recall": 1.0,
       "must_contain": 1.0,
-      "latency_ms": 2416.75,
+      "latency_ms": 2109.5,
       "errors": 0
     },
     "high_risk": {
@@ -83,8 +83,8 @@
       "precision": 0.21,
       "citation_precision": 1.0,
       "expected_citation_recall": 0.833,
-      "must_contain": 0.75,
-      "latency_ms": 1887.667,
+      "must_contain": 0.917,
+      "latency_ms": 1960.0,
       "errors": 0
     },
     "obligation": {
@@ -95,15 +95,15 @@
       "precision": 0.16,
       "citation_precision": 1.0,
       "expected_citation_recall": 0.923,
-      "must_contain": 0.808,
-      "latency_ms": 2382.769,
+      "must_contain": 0.846,
+      "latency_ms": 2158.846,
       "errors": 0
     },
     "out_of_scope": {
       "n": 4,
       "citation_precision": 1.0,
       "declined": 1.0,
-      "latency_ms": 987.75,
+      "latency_ms": 817.75,
       "errors": 0
     },
     "penalties": {
@@ -115,7 +115,7 @@
       "citation_precision": 1.0,
       "expected_citation_recall": 1.0,
       "must_contain": 1.0,
-      "latency_ms": 1789.333,
+      "latency_ms": 1697.667,
       "errors": 0
     },
     "prohibition": {
@@ -126,8 +126,8 @@
       "precision": 0.18,
       "citation_precision": 1.0,
       "expected_citation_recall": 1.0,
-      "must_contain": 0.767,
-      "latency_ms": 2029.4,
+      "must_contain": 0.867,
+      "latency_ms": 2473.8,
       "errors": 0
     },
     "scope": {
@@ -139,7 +139,7 @@
       "citation_precision": 1.0,
       "expected_citation_recall": 1.0,
       "must_contain": 1.0,
-      "latency_ms": 1595.5,
+      "latency_ms": 1910.5,
       "errors": 0
     },
     "timeline": {
@@ -151,7 +151,7 @@
       "citation_precision": 1.0,
       "expected_citation_recall": 1.0,
       "must_contain": 1.0,
-      "latency_ms": 1693.5,
+      "latency_ms": 1368.5,
       "errors": 0
     },
     "transparency": {
@@ -163,7 +163,7 @@
       "citation_precision": 1.0,
       "expected_citation_recall": 1.0,
       "must_contain": 1.0,
-      "latency_ms": 1956.667,
+      "latency_ms": 1753.333,
       "errors": 0
     }
   },
@@ -172,7 +172,7 @@
     "out_of_scope": 4
   },
   "token_usage": {
-    "input_tokens": 256822,
-    "output_tokens": 14423
+    "input_tokens": 258129,
+    "output_tokens": 14611
   }
 }

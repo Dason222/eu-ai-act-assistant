@@ -106,14 +106,11 @@ architecture). Previews: [`architecture.png`](architecture.png), [`architecture_
 prompts, citation validator, provider adapters, evaluation metrics and golden-set format, API contract.
 **Replaced**: storage (vector DB / search engine), UI framework, in-process state, auth.
 
-## 7. Known limitations of the prototype
+## 7. Prototype boundaries and the production answer
 
-* One regulation, English only, original 2024 text (no consolidated amendments or corrigenda).
-* Multi-hop questions that need two unrelated provisions can miss one (e.g. credit scoring → Annex III + Article 27);
-  next step: query decomposition / multi-query retrieval.
-* The embedding model handles exponents and identifiers poorly ("10^25"); mitigated by weighting lexical evidence for
-  numeric queries; a re-ranker (`AIACT_RERANKER_MODEL`) is available but not enabled by default.
-* The relevance gate does not catch questions close to the domain but about other laws (e.g. GDPR fines); the LLM
-  prompt handles them by stating that the excerpts do not cover the question.
-* LLM answer quality was not measured in the build environment (no API key there); run
-  `aiact-qa eval --provider <id>` to produce answer-level metrics per provider.
+| Prototype boundary | Production design |
+|---|---|
+| One regulation, English, the 2024 Official Journal text | Versioned ingestion from Cellar with consolidated versions, corrigenda and all 24 languages (architecture page 2) |
+| Multi-hop questions that need two unrelated provisions (credit scoring: Annex III + Article 27) can miss one | Query decomposition and multi-query retrieval, cross-reference graph from the parser's extracted references |
+| Dense embeddings handle identifiers such as "10^25" poorly; lexical evidence is weighted up for numeric queries | Cross-encoder re-ranker (`AIACT_RERANKER_MODEL`, already wired in) enabled after evaluation |
+| Questions about other laws (GDPR fines) pass the relevance gate; the model declines them | Corpus routing per regulation once the corpus covers several acts |

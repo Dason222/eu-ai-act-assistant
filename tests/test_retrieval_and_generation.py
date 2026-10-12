@@ -195,3 +195,10 @@ def test_nonexistent_provisions_are_flagged():
     assert prompts.missing_provisions("What does Article 120 say? And Annex XV?") == ["Article 120", "Annex XV"]
     assert prompts.missing_provisions("What does Article 113 say about Annex XIII or Annex 3?") == []
     assert "<note>Article 120 does not exist" in prompts.user_message("Quote Article 120", [])
+
+
+def test_nonexistent_provision_answer_is_a_valid_uncited_reply():
+    from aiact_qa.generation import prompts
+
+    assert prompts.DECLINE.search("Article 120 does not exist; the regulation ends at Article 113.")
+    assert prompts.DECLINE.search("There is no Article 120 in the regulation.")
