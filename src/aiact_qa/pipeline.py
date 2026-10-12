@@ -238,7 +238,8 @@ class QAEngine:
                 # Buffer model output; streaming unvalidated claims would leak before checks.
                 for _ in self.llm.stream(self._system, messages, llm_result):
                     pass
-                answer.answer, answer.model, answer.usage = tidy(llm_result.text), llm_result.model, llm_result.usage
+                answer.answer = prompts.unbracket_missing(tidy(llm_result.text))
+                answer.model, answer.usage = llm_result.model, llm_result.usage
                 if prompts.OUT_OF_SCOPE_MARKER in answer.answer:
                     answer.mode, answer.answer = "out_of_scope", prompts.OUT_OF_SCOPE_ANSWER
                 if llm_result.refused:
