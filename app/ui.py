@@ -91,7 +91,8 @@ with st.sidebar:
     st.markdown("**EU AI Act Assistant**")
     st.markdown(
         f'<p class="muted">Answers draw on retrieved passages from <a href="{ELI_URL}">Regulation (EU) 2024/1689</a> '
-        "as published in the Official Journal. References identify supporting provisions, but do not guarantee legal accuracy.</p>",
+        "as published in the Official Journal. References identify supporting provisions, "
+        "but do not guarantee legal accuracy.</p>",
         unsafe_allow_html=True,
     )
     if st.button("New conversation", icon=":material/add:", use_container_width=True):
