@@ -24,7 +24,7 @@ architecture). Previews: [`architecture.png`](architecture.png), [`architecture_
 | 9 | Relevance gate | `pipeline.py` | best dense similarity, references | out-of-scope reply without an LLM call when similarity < 0.55 and no explicit reference; the model's own refusal marker maps to the same reply |
 | 10 | Context builder | `generation/prompts.py` | top-k chunks | numbered `<excerpt label=…>` blocks within a 2,600-word budget; static system prompt + table of contents (prompt-cached); a note when the question names a provision that does not exist |
 | 11 | LLM gateway | `generation/providers.py`, `generation/llm.py` | system prompt, excerpts, question (history only reaches the condenser) | answer draft, buffered until validation; token usage, stop reason; provider and model restricted to an allowlist |
-| 12 | Citation validator | `generation/citations.py` | answer draft, sources | citations normalised to provision and paragraph, `verified` flag, deep link to the EUR-Lex paragraph anchor (`#050.003`); a draft with missing or unverified citations is replaced by the quoted provisions |
+| 12 | Citation validator | `generation/citations.py` | answer draft, sources | citations normalised to provision and paragraph, `verified` flag, link to the provision on EUR-Lex (`#art_50`); a draft with missing or unverified citations is replaced by the quoted provisions |
 | 13 | Interfaces | `api.py`, `app/ui.py`, `cli.py` | HTTP / chat / shell | JSON, SSE stream, chat UI with linked citations, sources and feedback |
 | 14 | Evaluation | `evaluation/*`, `scripts/run_redteam.py` | golden set, red-team probes, engine | per-question results + summary (retrieval and answer metrics, optional LLM judge); red-team safety and behaviour scores over 3 runs |
 | 15 | Feedback | `api.py` | rating, comment | `data/feedback/feedback.jsonl` → candidate test cases |
@@ -42,7 +42,7 @@ architecture). Previews: [`architecture.png`](architecture.png), [`architecture_
 
 | Decision | Rationale | Evidence |
 |---|---|---|
-| Parse by EUR-Lex element ids instead of generic PDF/HTML chunking | Legal answers must cite the exact provision; ids give paragraph-level deep links and exact chapter/section context | Counts match the OJ (113/180/13/68); tested in `tests/test_ingestion.py` |
+| Parse by EUR-Lex element ids instead of generic PDF/HTML chunking | Legal answers must cite the exact provision; ids give provision deep links, paragraph-level citation checks and exact chapter/section context | Counts match the OJ (113/180/13/68); tested in `tests/test_ingestion.py` |
 | Provision-bounded chunks, lead-in repeated in split paragraphs, one chunk per definition | A chunk never mixes two articles (no wrong citations); "What is X?" hits the definition itself | `Article 5(1)(a)-(b)` … `Article 5(1)(h)` chunks all start with "The following AI practices shall be prohibited" |
 | Hybrid retrieval (BM25 + dense + references, RRF) | BM25 catches exact terms and identifiers; dense catches paraphrases ("chatbot" → Art. 50); explicit references must always win | Golden set, k=8: hybrid+refs hit 0.98 / recall 0.96 / MRR 0.84 vs BM25 0.94/0.92/0.81, dense 0.92/0.91/0.78 |
 | Local ONNX embeddings (bge-small, CPU) | No document data leaves the host for indexing; no embedding API cost; ~10 ms per query | 570 chunks embedded in ~50 s on CPU |

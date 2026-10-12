@@ -10,7 +10,7 @@ paragraph, annex or recital it relies on.
 Q: Can my company use AI to read employees' emotions during video calls?
 A: No. AI systems that infer emotions of natural persons in the workplace are prohibited, except for medical
    or safety reasons. Article 5(1)(f) ...
-   Sources: Article 5(1)(f) -> https://eur-lex.europa.eu/eli/reg/2024/1689/oj/eng#005.001
+   Sources: Article 5(1)(f) -> https://eur-lex.europa.eu/legal-content/EN/TXT/HTML/?uri=CELEX:32024R1689#art_5
 ```
 
 ## Deliverables

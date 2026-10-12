@@ -68,7 +68,7 @@ PROTOTYPE = {
          R2, "query", 220, 78),
         ("llm", "LLM gateway", "allowlisted provider + model;\ndraft buffered until validated", X3, R2, "llm",
          240, 78),
-        ("cite", "Citation validator", "[Article 50(3)] -> EUR-Lex #050.003;\nfails -> quoted provisions", X2, R2,
+        ("cite", "Citation validator", "[Article 50(3)] -> EUR-Lex #art_50;\nfails -> quoted provisions", X2, R2,
          "query", 220, 78),
         ("answer", "Answer", "answer, linked citations, sources,\nmode, usage, latency, warnings", X1, R2,
          "query", 230, 78),
