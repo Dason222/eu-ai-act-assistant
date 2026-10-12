@@ -42,7 +42,7 @@ the grounded-answer system prompt, the follow-up condensing prompt and the LLM-a
 | Golden set integrity | `scripts/verify_golden_set.py`: every expected provision exists and every key fact occurs verbatim | 57/57 valid |
 | Retrieval quality | `compare_retrieval_strategies` on the golden set | hybrid + references best: hit@8 0.98, recall@8 0.96, MRR 0.84 |
 | End-to-end | Executed notebook, CLI and REST API (`/health`, `/ask`, `/ask/stream`, `/provisions`) | working in extractive and LLM mode |
-| Live LLM generation | `aiact-qa eval --provider openai --model gpt-5.4-mini` on all 57 questions | 54 LLM answers, 3 refusals, 0 withheld; citation precision 1.00, must-contain 0.91 ([report](../reports/openai-gpt-5.4-mini)) |
+| Live LLM generation | `aiact-qa eval --provider openai --model gpt-5.4-mini` on all 57 questions | 53 LLM answers, 4 refusals, 0 withheld; citation precision 1.00, must-contain 0.86 (±0.04 between runs) ([report](../reports/openai-gpt-5.4-mini)) |
 | Static analysis | `ruff` (E, F, W, I, UP, B, SIM) on `src/`, `app/`, `tests/`, `scripts/` (notebook excluded as demo code) | clean |
 | Docker image | Built and run as a single container behind Traefik | live demo deployment |
 
@@ -59,6 +59,10 @@ defects that the unit tests and the extractive-mode metrics did not:
 * **Glossary matched substrings**, so "define" triggered the expansion for "fine" (penalties).
 * **Lay wording missed Annex III.** "CV-screening tool" did not retrieve the employment use case; the golden set
   only passed because it says "screen job applications". Hiring terms were added to the glossary.
+* **Red-teaming the prompt** (14 jailbreak and injection probes: override, prompt leak, role-play, fake
+  excerpts, non-existent articles, false premises, forced yes/no, forged citations, Lithuanian and base64
+  injections, evasion help, multi-turn pivot). All held, but a Lithuanian injection was refused in Lithuanian
+  and then withheld by the English-only refusal check; refusals now use a language-independent marker.
 * **Quota counted local evaluation runs**, so an eval stopped after 40 questions with quota errors that looked
   like retrieval misses.
 
