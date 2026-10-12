@@ -208,7 +208,7 @@ flowchart TB
         CC["Claude Code + Remote Control"]
         MGR["Manager service (not an AI)<br/>task state · cycle count · model hand-over<br/>SQLite + Git"]
     end
-    CC -->|"/ailoop &lt;task&gt;"| W["Claude implements the task"]
+    CC -->|"/ailoop task"| W["Claude implements the task"]
     W --> R["Codex: read-only review of the Git diff<br/>bugs · unmet requirements · hallucinations"]
     R -->|PASS| T["tests · build · lint"] --> S["DONE summary"]
     R -->|issues| HM{"/ailoop: wait for me<br/>/ailoop-nohuman: back to Claude,<br/>max 4 cycles"}
