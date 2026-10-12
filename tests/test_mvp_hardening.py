@@ -140,3 +140,12 @@ def test_act_name_does_not_steer_retrieval(chunks):
     retriever = HybridRetriever(chunks, dense=None)
     hits = retriever.retrieve("What is a deployer under Regulation (EU) 2024/1689 (the EU AI Act)?", k=8).hits
     assert hits[0].chunk.label == "Article 3(4)"
+
+
+def test_act_name_stripping_is_linear_time():
+    import time
+
+    for hostile in (" " * 2000 + "x", " (" * 1000, " under (" * 250, " the eu" * 280):
+        start = time.perf_counter()
+        strip_act_name(hostile)
+        assert time.perf_counter() - start < 0.05

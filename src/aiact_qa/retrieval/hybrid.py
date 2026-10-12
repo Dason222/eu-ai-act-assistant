@@ -57,21 +57,20 @@ _GLOSSARY_RE = re.compile(
 
 # The index holds only this act, so naming it adds no signal, and "2024/1689" triggers the numeric
 # lexical boost that ranks Articles 102-110 (which list amended regulations) above everything else.
-_ACT_NAME = re.compile(
-    r"(?:\s+(?:under|in|of|according to|within|as defined in|for the purposes of))?\s*\(?\s*"
-    r"(?:the\s+)?(?:eu\s+)?(?:(?:ai|artificial intelligence)\s+act\s*)?\(?\s*"
-    r"(?:regulation\s*\(eu\)\s*(?:no\.?\s*)?)?2024/1689\s*\)?\s*\)?"
-    r"|(?:\s+(?:under|in|of|according to|within|as defined in|for the purposes of))?\s*\(?\s*"
-    r"\b(?:the\s+)?(?:eu\s+)?(?:ai|artificial intelligence)\s+act\b\s*\)?",
-    re.I,
-)
+# Whitespace is collapsed first, so every pattern below matches single spaces only and runs in
+# linear time (an earlier version with chained optional \s* groups backtracked catastrophically).
+_PREPOSITION = r"(?: (?:under|in|of|according to|within|as defined in|for the purposes of))?"
+_ACT_NUMBER = re.compile(_PREPOSITION + r" ?\(?(?:regulation \(eu\) (?:no\.? )?)?2024/1689\)?", re.I)
+_ACT_TITLE = re.compile(_PREPOSITION + r" ?\(?\b(?:the )?(?:eu )?(?:ai|artificial intelligence) act\b\)?", re.I)
 
 
 def strip_act_name(query: str) -> str:
     """'What is a deployer under the EU AI Act (Regulation (EU) 2024/1689)?' -> 'What is a deployer?'"""
-    stripped = re.sub(r"\s+([?.!,])", r"\1", _ACT_NAME.sub(" ", query))
-    stripped = re.sub(r"\s{2,}", " ", stripped).strip()
-    return stripped if len(stripped.split()) >= 3 else query
+    q = " ".join(query.split())
+    q = _ACT_TITLE.sub("", _ACT_NUMBER.sub("", q)).replace("()", "")
+    q = re.sub(r" ([?.!,])", r"\1", " ".join(q.split()))
+    q = q.strip()
+    return q if len(q.split()) >= 3 else query
 
 
 def expand_query(query: str) -> str:
