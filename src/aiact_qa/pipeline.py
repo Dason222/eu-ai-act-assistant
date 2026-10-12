@@ -187,7 +187,7 @@ class QAEngine:
     # ------------------------------------------------------------------------------------------ #
     def ask_stream(
         self, question: str, history: History | None = None, top_k: int | None = None,
-        identity: str = "anonymous",
+        identity: str | None = None,
     ) -> Iterator[dict[str, Any]]:
         started = time.perf_counter()
         question = (question or "").strip()
@@ -201,7 +201,9 @@ class QAEngine:
         ][-2 * self.settings.max_history_turns:]
         top_k = min(top_k or self.settings.top_k, 20)
         # Reserve before the rewrite call: even rewriting consumes billable LLM tokens.
-        self.budget.consume(identity, billable=self.llm is not None)
+        # identity=None marks a trusted local caller (CLI, notebook, evaluation): no quota.
+        if identity is not None:
+            self.budget.consume(identity, billable=self.llm is not None)
 
         standalone = self._standalone_question(question, history)
         result = self.retriever.retrieve(standalone, k=top_k, candidate_k=self.settings.candidate_k)
@@ -263,7 +265,7 @@ class QAEngine:
 
     def ask(
         self, question: str, history: History | None = None, top_k: int | None = None,
-        identity: str = "anonymous",
+        identity: str | None = None,
     ) -> Answer:
         final: dict[str, Any] | None = None
         for event in self.ask_stream(question, history, top_k, identity):

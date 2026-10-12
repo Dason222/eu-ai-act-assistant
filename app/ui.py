@@ -8,7 +8,7 @@ import secrets
 
 import streamlit as st
 
-from aiact_qa.api import record_feedback
+from aiact_qa.api import client_identity, record_feedback
 from aiact_qa.budget import BudgetExceeded
 from aiact_qa.config import ELI_URL, get_settings
 from aiact_qa.pipeline import QAEngine
@@ -39,7 +39,8 @@ if password and not state.get("authenticated"):
         state.authenticated = True
         st.rerun()
     st.stop()
-state.setdefault("budget_identity", "ui-" + secrets.token_hex(16))
+# Keyed on the visitor's IP (via Traefik), so reloading the page does not reset the quota.
+state.setdefault("budget_identity", "ui-" + client_identity(st.context.headers, secrets.token_hex(8)))
 engine = load_engine()
 state.setdefault("messages", [])  # [{"role", "content", "answer"?}]
 state.setdefault("pending", None)

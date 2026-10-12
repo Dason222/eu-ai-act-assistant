@@ -19,10 +19,6 @@ from aiact_qa.retrieval.references import Reference, find_references
 log = logging.getLogger(__name__)
 
 RRF_K = 60
-_DEFINITION_QUERY = re.compile(
-    r"\b(?:definition of|define|what (?:does|is|are) (?:an? |the )?|meaning of)\b",
-    re.I,
-)
 _NUMERIC = re.compile(r"\d+(?:[/^.]\d+)+|\b\d{3,}\b")
 # Recitals explain but do not bind; they paraphrase articles heavily and would otherwise crowd them out.
 KIND_WEIGHT = {"article": 1.0, "definition": 1.0, "annex": 1.0, "recital": 0.75}
@@ -33,20 +29,62 @@ GLOSSARY = {
     "deepfake": "deep fake image audio video content",
     "facial recognition": "remote biometric identification",
     "fine": "administrative fines penalties",
-    "penalt": "administrative fines penalties",
+    "fines": "administrative fines penalties",
+    "penalty": "administrative fines penalties",
+    "penalties": "administrative fines penalties",
     "gpai": "general-purpose AI model",
     "llm": "general-purpose AI model",
     "foundation model": "general-purpose AI model",
     "when": "entry into force apply from date",
     "sandbox": "AI regulatory sandboxes",
     "social scoring": "social behaviour evaluation classification social score",
+    "cv": "recruitment or selection of natural persons filter job applications evaluate candidates employment",
+    "cvs": "recruitment or selection of natural persons filter job applications evaluate candidates employment",
+    "resume": "recruitment or selection of natural persons filter job applications evaluate candidates employment",
+    "resumes": "recruitment or selection of natural persons filter job applications evaluate candidates employment",
+    "hiring": "recruitment or selection of natural persons filter job applications evaluate candidates employment",
+    "credit score": "creditworthiness credit score natural persons",
+    "credit scoring": "creditworthiness credit score natural persons",
+    "exam": "education vocational training evaluate learning outcomes",
+    "police": "law enforcement authorities",
+    "emotion": "emotion recognition system",
 }
+# whole words only: a substring match would expand "define" with "fine"
+_GLOSSARY_RE = re.compile(
+    r"\b(" + "|".join(sorted(map(re.escape, GLOSSARY), key=len, reverse=True)) + r")\b"
+)
 
 
 def expand_query(query: str) -> str:
-    lowered = query.lower()
-    extra = [v for k, v in GLOSSARY.items() if k in lowered]
+    lowered = query.lower().replace("résumé", "resume")
+    extra = list(dict.fromkeys(GLOSSARY[m] for m in _GLOSSARY_RE.findall(lowered)))
     return f"{query} {' '.join(extra)}" if extra else query
+
+
+_DEFINITION_LEAD = re.compile(
+    r"^(?:what\s+(?:is|are)\s+|define\s+|(?:the\s+)?(?:definition|meaning)\s+of\s+"
+    r"|what\s+does\s+(?=.*\bmean\b))(?:the\s+(?:definition|meaning)\s+of\s+)?",
+    re.I,
+)
+_DEFINITION_TAIL = re.compile(
+    r"\s+(?:according to|under|in|within|as defined in|for the purposes of)\s+(?:the\s+)?"
+    r"(?:ai act|regulation|act)\b.*$|\s+mean\b.*$",
+    re.I,
+)
+
+
+def definition_subject(query: str) -> str:
+    """'What is a provider according to the regulation?' -> 'provider'; '' if not a definition question."""
+    q = query.strip().strip(" ?.!").replace("\u2019", "'")
+    if not _DEFINITION_LEAD.match(q):
+        return ""
+    q = _DEFINITION_TAIL.sub("", _DEFINITION_LEAD.sub("", q))
+    q = re.sub(r"^(?:an?|the)\s+", "", q.strip(" '\"")).strip(" '\"").lower()
+    return q if 0 < len(q.split()) <= 6 else ""
+
+
+def _term_forms(term: str) -> set[str]:
+    return {term, term + "s", term.removesuffix("s")}
 
 
 @dataclass
@@ -147,36 +185,18 @@ class HybridRetriever:
             for i, sim in dense_hits:
                 fused[i].dense_similarity = sim
 
-        # An explicit definition query should favour the exact Article 3 term,
-        # not a loosely similar definition such as "performance of an AI system".
-        if _DEFINITION_QUERY.search(query):
-            # Add Article 3 definitions even when BM25 excludes the exact term
-            # from its top candidate list.
+        # "What is a provider?" should surface the Article 3 definition of exactly that term, but
+        # "What are the obligations of providers?" must not: boost only when the term IS the subject.
+        subject = definition_subject(query)
+        if subject:
             for idx in self._by_provision.get("art_3", []):
                 c = self.chunks[idx]
-                if c.kind != "definition":
-                    continue
-                title_match = re.search(r"Definition of '([^']+)'", c.title)
-                term = title_match.group(1).lower() if title_match else ""
-                if term and term in query.lower():
+                match = re.search(r"Definition of '([^']+)'", c.title)
+                if c.kind == "definition" and match and subject in _term_forms(match.group(1).lower()):
                     hit = fused.setdefault(idx, Hit(c, 0.0))
                     hit.score += 2
                     if "exact_definition" not in hit.retrievers:
                         hit.retrievers.append("exact_definition")
-            cleaned = re.sub(
-                r"^(?:what is|what are|what does|define|definition of|meaning of)\s+",
-                "", query.lower().strip(),
-            )
-            cleaned = cleaned.replace(" under the ai act", "").replace(" in the ai act", "").strip(" ?.'\"")
-            for h in fused.values():
-                if h.chunk.kind != "definition":
-                    continue
-                match = re.search(r"Definition of '([^']+)'", h.chunk.title)
-                if match and (cleaned == match.group(1).lower()
-                              or cleaned.endswith(" " + match.group(1).lower())):
-                    h.score += 2
-                    if "exact_definition" not in h.retrievers:
-                        h.retrievers.append("exact_definition")
         hits = sorted(fused.values(), key=lambda h: -h.score)
         if self._reranker_model:
             hits = self._rerank(query, hits[: max(k * 3, 20)])

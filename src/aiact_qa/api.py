@@ -21,6 +21,14 @@ from aiact_qa.config import Settings, get_settings
 log = logging.getLogger(__name__)
 
 
+def client_identity(headers: Any, peer: str = "") -> str:
+    """Per-client quota key. Traefik drops client-sent X-Forwarded-* headers from untrusted peers and
+    sets X-Real-Ip itself, so behind it this is the visitor's address; the peer address otherwise.
+    Global quotas in the SQLite budget always apply, whatever the identity."""
+    real_ip = (headers.get("x-real-ip") or "").strip()
+    return "ip-" + (real_ip or peer or "unknown")
+
+
 class Turn(BaseModel):
     role: Literal["user", "assistant"]
     content: str = Field(max_length=1000)
@@ -81,9 +89,7 @@ def create_app(engine: Any = None, settings: Settings | None = None) -> FastAPI:
         except ValueError as exc:
             raise HTTPException(400, str(exc)) from exc
         history = [t.model_dump() for t in body.history][-2 * settings.max_history_turns :]
-        # This identity is advisory (reverse proxies can collapse source IPs). Global quotas
-        # in the SQLite budget always apply, even when the identity changes.
-        identity = request.client.host if request.client else "api"
+        identity = client_identity(request.headers, request.client.host if request.client else "")
         return engine, history, identity
 
     @app.get("/health")
