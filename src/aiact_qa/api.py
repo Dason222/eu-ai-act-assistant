@@ -15,6 +15,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from aiact_qa import __version__
+from aiact_qa.budget import BudgetExceeded
 from aiact_qa.config import Settings, get_settings
 
 log = logging.getLogger(__name__)
@@ -22,15 +23,15 @@ log = logging.getLogger(__name__)
 
 class Turn(BaseModel):
     role: Literal["user", "assistant"]
-    content: str
+    content: str = Field(max_length=1000)
 
 
 class AskRequest(BaseModel):
     question: str = Field(min_length=1)
-    history: list[Turn] = Field(default_factory=list)
+    history: list[Turn] = Field(default_factory=list, max_length=12)
     top_k: int | None = Field(default=None, ge=1, le=20)
     provider: str | None = Field(default=None, description="anthropic, openai, azure_openai, mistral, ...")
-    model: str | None = None
+    model: str | None = Field(default=None, max_length=100)
 
 
 class SearchRequest(BaseModel):
@@ -71,7 +72,7 @@ def create_app(engine: Any = None, settings: Settings | None = None) -> FastAPI:
         if expected and x_api_key != expected:
             raise HTTPException(status_code=401, detail="invalid or missing X-API-Key")
 
-    def resolve(request: Request, body: AskRequest) -> tuple[Any, list[dict[str, str]]]:
+    def resolve(request: Request, body: AskRequest) -> tuple[Any, list[dict[str, str]], str]:
         engine, settings = get_state(request)
         if len(body.question) > settings.max_question_chars:
             raise HTTPException(422, f"question longer than {settings.max_question_chars} characters")
@@ -80,7 +81,10 @@ def create_app(engine: Any = None, settings: Settings | None = None) -> FastAPI:
         except ValueError as exc:
             raise HTTPException(400, str(exc)) from exc
         history = [t.model_dump() for t in body.history][-2 * settings.max_history_turns :]
-        return engine, history
+        # This identity is advisory (reverse proxies can collapse source IPs). Global quotas
+        # in the SQLite budget always apply, even when the identity changes.
+        identity = request.client.host if request.client else "api"
+        return engine, history, identity
 
     @app.get("/health")
     def health(request: Request) -> dict[str, Any]:
@@ -94,9 +98,11 @@ def create_app(engine: Any = None, settings: Settings | None = None) -> FastAPI:
 
     @app.post("/ask", dependencies=[Depends(require_key)])
     def ask(request: Request, body: AskRequest) -> dict[str, Any]:
-        engine, history = resolve(request, body)
+        engine, history, identity = resolve(request, body)
         try:
-            return engine.ask(body.question, history=history, top_k=body.top_k).to_dict()
+            return engine.ask(body.question, history=history, top_k=body.top_k, identity=identity).to_dict()
+        except BudgetExceeded as exc:
+            raise HTTPException(429, str(exc)) from exc
         except ValueError as exc:
             raise HTTPException(422, str(exc)) from exc
         except Exception as exc:
@@ -105,15 +111,19 @@ def create_app(engine: Any = None, settings: Settings | None = None) -> FastAPI:
 
     @app.post("/ask/stream", dependencies=[Depends(require_key)])
     def ask_stream(request: Request, body: AskRequest) -> StreamingResponse:
-        engine, history = resolve(request, body)
+        engine, history, identity = resolve(request, body)
 
         def events() -> Iterator[str]:
             try:
-                for event in engine.ask_stream(body.question, history=history, top_k=body.top_k):
+                for event in engine.ask_stream(
+                    body.question, history=history, top_k=body.top_k, identity=identity
+                ):
                     yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
-            except Exception as exc:
+            except BudgetExceeded:
+                yield f"data: {json.dumps({'type': 'error', 'message': 'Daily request or budget limit reached'})}\n\n"
+            except Exception:
                 log.exception("stream failed")
-                yield f"data: {json.dumps({'type': 'error', 'message': str(exc)[:200]})}\n\n"
+                yield f"data: {json.dumps({'type': 'error', 'message': 'The request could not be completed'})}\n\n"
 
         return StreamingResponse(events(), media_type="text/event-stream")
 

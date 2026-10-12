@@ -32,7 +32,7 @@ class Settings(BaseSettings):
     model_cache_dir: Path | None = None
     top_k: int = 8                      # chunks passed to the LLM
     candidate_k: int = 40               # candidates per retriever before fusion
-    max_context_words: int = 6000       # budget for the excerpts sent to the LLM
+    max_context_words: int = 2600       # budget for the excerpts sent to the LLM
     # Below this best dense similarity (and with no explicit legal reference in the question) the
     # question is treated as out of scope and answered without calling the LLM.
     min_relevance: float = 0.55
@@ -45,14 +45,21 @@ class Settings(BaseSettings):
     llm_api_key: str = ""               # key for openai_compatible endpoints
     llm_effort: str = "medium"          # Claude effort: low | medium | high | xhigh | max
     llm_rewrite_effort: str = "low"     # effort for the short query-rewriting call
-    llm_max_tokens: int = 16000
+    llm_max_tokens: int = 1500
     llm_timeout_s: float = 120.0
     llm_server_side_fallbacks: bool = True
 
     # --- Service ----------------------------------------------------------------------------------
     api_key: str = ""                   # if set, the REST API requires header "X-API-Key"
     max_question_chars: int = 2000
-    max_history_turns: int = 6
+    max_history_turns: int = 3
+    max_history_chars_per_turn: int = 1000
+    allowed_providers: str = "anthropic,extractive"
+    allowed_models: str = "claude-sonnet-5-5,claude-haiku-5-5"
+    daily_budget_usd: float = 2.0
+    reserved_cost_per_llm_request_usd: float = 0.06
+    daily_request_limit: int = 500
+    daily_actor_request_limit: int = 40
     log_level: str = "INFO"
 
     @property

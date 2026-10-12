@@ -2,9 +2,14 @@
 
 from __future__ import annotations
 
+import hmac
+import os
+import secrets
+
 import streamlit as st
 
 from aiact_qa.api import record_feedback
+from aiact_qa.budget import BudgetExceeded
 from aiact_qa.config import ELI_URL, get_settings
 from aiact_qa.pipeline import QAEngine
 
@@ -25,8 +30,17 @@ def load_engine() -> QAEngine:
     return QAEngine.from_settings(get_settings())
 
 
-engine = load_engine()
 state = st.session_state
+password = os.getenv("AIACT_UI_PASSWORD", "")
+if password and not state.get("authenticated"):
+    st.title("EU AI Act Assistant")
+    entered = st.text_input("Demo access password", type="password")
+    if st.button("Unlock") and hmac.compare_digest(entered, password):
+        state.authenticated = True
+        st.rerun()
+    st.stop()
+state.setdefault("budget_identity", "ui-" + secrets.token_hex(16))
+engine = load_engine()
 state.setdefault("messages", [])  # [{"role", "content", "answer"?}]
 state.setdefault("pending", None)
 
@@ -37,7 +51,8 @@ with st.sidebar:
         f"Answers questions about [Regulation (EU) 2024/1689]({ELI_URL}) using only the official text, "
         "with citations to the articles, annexes and recitals used."
     )
-    providers = [p for p in engine.available_providers() if p["configured"]]
+    allowed = {p.strip() for p in get_settings().allowed_providers.split(",")}
+    providers = [p for p in engine.available_providers() if p["configured"] and p["id"] in allowed]
     labels = {p["id"]: f"{p['label']}" for p in providers}
     default_id = engine.llm.provider if engine.llm else "extractive"
     ids = list(labels)
@@ -46,10 +61,8 @@ with st.sidebar:
         format_func=lambda i: labels[i],
     )
     info = next(p for p in providers if p["id"] == provider)
+    # No free-text model overrides: expensive models cannot be selected by web visitors.
     model = ""
-    if provider != "extractive":
-        default_model = engine.llm.model if engine.llm and engine.llm.provider == provider else info["default_model"]
-        model = st.text_input("Model", value=default_model)
     st.caption(f"Hosting: {info['hosting']}")
     top_k = st.slider("Excerpts sent to the model", 3, 15, get_settings().top_k)
     st.subheader("Try")
@@ -113,16 +126,24 @@ if question:
         final: dict = {}
 
         def deltas():
-            for event in active.ask_stream(question, history=history, top_k=top_k):
+            for event in active.ask_stream(
+                question, history=history, top_k=top_k, identity=state.budget_identity
+            ):
                 if event["type"] == "delta":
                     yield event["text"]
                 elif event["type"] == "done":
                     final.update(event["answer"])
 
-        with st.spinner("Searching the regulation…"):
-            st.write_stream(deltas())
-        render_answer(final, key=f"m{len(state.messages)}")
-    state.messages.append({"role": "assistant", "content": final["answer"], "answer": final})
+        try:
+            with st.spinner("Searching and verifying sources…"):
+                st.write_stream(deltas())
+        except BudgetExceeded as exc:
+            st.warning(str(exc))
+            st.stop()
+        if final:
+            render_answer(final, key=f"m{len(state.messages)}")
+    if final:
+        state.messages.append({"role": "assistant", "content": final["answer"], "answer": final})
 
 st.caption(
     "Informational prototype - not legal advice. Answers are generated from the text of Regulation (EU) "

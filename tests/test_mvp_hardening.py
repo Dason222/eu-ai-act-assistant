@@ -1,0 +1,41 @@
+"""MVP security and evidence-regression tests."""
+from pathlib import Path
+
+import pytest
+
+from aiact_qa.budget import BudgetExceeded, UsageBudget
+from aiact_qa.config import Settings
+from aiact_qa.generation.citations import extract_citations
+from aiact_qa.retrieval.hybrid import HybridRetriever
+from aiact_qa.schemas import Source
+
+
+def test_global_budget_across_instances(tmp_path: Path):
+    settings = Settings(data_dir=tmp_path, daily_request_limit=3,
+                        daily_actor_request_limit=2, daily_budget_usd=0.12,
+                        reserved_cost_per_llm_request_usd=0.06)
+    db = tmp_path / "shared.sqlite3"
+    first, second = UsageBudget(db, settings), UsageBudget(db, settings)
+    first.consume("a", billable=True)
+    second.consume("b", billable=True)
+    with pytest.raises(BudgetExceeded):
+        first.consume("c", billable=True)
+    first.consume("a", billable=False)
+    with pytest.raises(BudgetExceeded):
+        second.consume("a", billable=False)
+
+
+def test_exact_paragraph_required():
+    source = Source(1, "art_5#2", "art_5", "article", "Article 5(2)",
+                    "Prohibited practices", "Paragraph 2", "https://example.test/#art_5")
+    result = extract_citations("See [Article 5(2)] and [Article 5(1)].", [source])
+    assert [(x.text, x.verified) for x in result] == [
+        ("Article 5(2)", True), ("Article 5(1)", False)
+    ]
+
+
+def test_definition_matching(regulation, chunks):
+    retriever = HybridRetriever(chunks, dense=None)
+    result = retriever.retrieve("What is an AI system under the AI Act?", k=8)
+    assert result.hits
+    assert result.hits[0].chunk.label == "Article 3(1)"

@@ -19,6 +19,10 @@ from aiact_qa.retrieval.references import Reference, find_references
 log = logging.getLogger(__name__)
 
 RRF_K = 60
+_DEFINITION_QUERY = re.compile(
+    r"\b(?:definition of|define|what (?:does|is|are) (?:an? |the )?|meaning of)\b",
+    re.I,
+)
 _NUMERIC = re.compile(r"\d+(?:[/^.]\d+)+|\b\d{3,}\b")
 # Recitals explain but do not bind; they paraphrase articles heavily and would otherwise crowd them out.
 KIND_WEIGHT = {"article": 1.0, "definition": 1.0, "annex": 1.0, "recital": 0.75}
@@ -143,6 +147,36 @@ class HybridRetriever:
             for i, sim in dense_hits:
                 fused[i].dense_similarity = sim
 
+        # An explicit definition query should favour the exact Article 3 term,
+        # not a loosely similar definition such as "performance of an AI system".
+        if _DEFINITION_QUERY.search(query):
+            # Add Article 3 definitions even when BM25 excludes the exact term
+            # from its top candidate list.
+            for idx in self._by_provision.get("art_3", []):
+                c = self.chunks[idx]
+                if c.kind != "definition":
+                    continue
+                title_match = re.search(r"Definition of '([^']+)'", c.title)
+                term = title_match.group(1).lower() if title_match else ""
+                if term and term in query.lower():
+                    hit = fused.setdefault(idx, Hit(c, 0.0))
+                    hit.score += 2
+                    if "exact_definition" not in hit.retrievers:
+                        hit.retrievers.append("exact_definition")
+            cleaned = re.sub(
+                r"^(?:what is|what are|what does|define|definition of|meaning of)\s+",
+                "", query.lower().strip(),
+            )
+            cleaned = cleaned.replace(" under the ai act", "").replace(" in the ai act", "").strip(" ?.'\"")
+            for h in fused.values():
+                if h.chunk.kind != "definition":
+                    continue
+                match = re.search(r"Definition of '([^']+)'", h.chunk.title)
+                if match and (cleaned == match.group(1).lower()
+                              or cleaned.endswith(" " + match.group(1).lower())):
+                    h.score += 2
+                    if "exact_definition" not in h.retrievers:
+                        h.retrievers.append("exact_definition")
         hits = sorted(fused.values(), key=lambda h: -h.score)
         if self._reranker_model:
             hits = self._rerank(query, hits[: max(k * 3, 20)])

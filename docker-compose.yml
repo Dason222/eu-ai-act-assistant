@@ -13,6 +13,8 @@ services:
     image: aiact-qa:latest
     restart: unless-stopped
     env_file: .env
+    environment:
+      AIACT_API_KEY: ${AIACT_API_KEY:?Set a strong AIACT_API_KEY in .env}
     volumes:
       - feedback:/app/data/feedback
     networks: [traefik]
@@ -33,6 +35,8 @@ services:
     depends_on: [api]
     restart: unless-stopped
     env_file: .env
+    environment:
+      AIACT_UI_PASSWORD: ${AIACT_UI_PASSWORD:?Set AIACT_UI_PASSWORD in .env}
     command: ["streamlit", "run", "app/ui.py", "--server.port=8501", "--server.address=0.0.0.0",
               "--server.headless=true", "--browser.gatherUsageStats=false"]
     healthcheck:
@@ -49,6 +53,9 @@ services:
       - traefik.http.routers.aiact-ui.entrypoints=${TRAEFIK_ENTRYPOINT:-websecure}
       - traefik.http.routers.aiact-ui.tls.certresolver=${TRAEFIK_CERT_RESOLVER:-letsencrypt}
       - traefik.http.routers.aiact-ui.priority=1
+      - traefik.http.routers.aiact-ui.middlewares=aiact-ui-ratelimit
+      - traefik.http.middlewares.aiact-ui-ratelimit.ratelimit.average=10
+      - traefik.http.middlewares.aiact-ui-ratelimit.ratelimit.burst=20
       - traefik.http.services.aiact-ui.loadbalancer.server.port=8501
 
 volumes:

@@ -36,11 +36,11 @@ class FakeEngine:
         self.provider = provider
         return self
 
-    def ask(self, question, history=None, top_k=None) -> Answer:
+    def ask(self, question, history=None, top_k=None, identity='anonymous') -> Answer:
         return Answer(question=question, answer="Prohibited [Article 5(1)(a)].", sources=[SOURCE],
                       citations=[Citation("Article 5(1)(a)", "art_5", "https://x#art_5", True)], mode="extractive")
 
-    def ask_stream(self, question, history=None, top_k=None):
+    def ask_stream(self, question, history=None, top_k=None, identity='anonymous'):
         yield {"type": "sources", "sources": [SOURCE.to_dict()], "standalone_question": question}
         yield {"type": "delta", "text": "Prohibited"}
         yield {"type": "done", "answer": self.ask(question).to_dict()}

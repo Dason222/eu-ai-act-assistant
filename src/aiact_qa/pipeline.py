@@ -17,6 +17,7 @@ import time
 from collections.abc import Iterator
 from typing import Any
 
+from aiact_qa.budget import UsageBudget
 from aiact_qa.config import Settings, get_settings
 from aiact_qa.generation import prompts
 from aiact_qa.generation.citations import extract_citations, unverified_warning
@@ -61,6 +62,7 @@ class QAEngine:
         self._provisions = regulation.by_id()
         self._system = prompts.system_blocks(regulation)
         self._variants: dict[tuple[str, str], QAEngine] = {}
+        self.budget = UsageBudget(settings.feedback_path.parent / "usage_budget.sqlite3", settings)
 
     # ------------------------------------------------------------------------------------------ #
     @classmethod
@@ -94,6 +96,12 @@ class QAEngine:
         if not provider and not model:
             return self
         key = ((provider or self.settings.llm_provider).lower(), model or "")
+        allowed_providers = {p.strip() for p in self.settings.allowed_providers.split(",")}
+        allowed_models = {m.strip() for m in self.settings.allowed_models.split(",")}
+        if key[0] not in allowed_providers:
+            raise ValueError("The selected LLM provider is not enabled for this deployment")
+        if key[1] and key[1] not in allowed_models:
+            raise ValueError("The selected LLM model is not enabled for this deployment")
         if key not in self._variants:
             llm = make_llm(self.settings, provider=key[0], model=model)
             self._variants[key] = QAEngine(self.regulation, self.chunks, self.retriever, llm, self.settings)
@@ -178,7 +186,8 @@ class QAEngine:
 
     # ------------------------------------------------------------------------------------------ #
     def ask_stream(
-        self, question: str, history: History | None = None, top_k: int | None = None
+        self, question: str, history: History | None = None, top_k: int | None = None,
+        identity: str = "anonymous",
     ) -> Iterator[dict[str, Any]]:
         started = time.perf_counter()
         question = (question or "").strip()
@@ -186,9 +195,13 @@ class QAEngine:
             raise ValueError("question must not be empty")
         if len(question) > self.settings.max_question_chars:
             raise ValueError(f"question longer than {self.settings.max_question_chars} characters")
-        history = [t for t in (history or []) if t.get("role") in {"user", "assistant"} and t.get("content")]
-        history = history[-2 * self.settings.max_history_turns :]
-        top_k = top_k or self.settings.top_k
+        history = [
+            {"role": t["role"], "content": t["content"][:self.settings.max_history_chars_per_turn]}
+            for t in (history or []) if t.get("role") in {"user", "assistant"} and isinstance(t.get("content"), str)
+        ][-2 * self.settings.max_history_turns:]
+        top_k = min(top_k or self.settings.top_k, 20)
+        # Reserve before the rewrite call: even rewriting consumes billable LLM tokens.
+        self.budget.consume(identity, billable=self.llm is not None)
 
         standalone = self._standalone_question(question, history)
         result = self.retriever.retrieve(standalone, k=top_k, candidate_k=self.settings.candidate_k)
@@ -203,17 +216,18 @@ class QAEngine:
         answer = Answer(question=question, answer="", sources=sources, standalone_question=standalone)
         if off_topic:
             answer.mode, answer.answer = "out_of_scope", prompts.OUT_OF_SCOPE_ANSWER
-            yield {"type": "delta", "text": answer.answer}
         elif self.llm is None:
             answer.mode = "extractive"
             answer.answer = self._extractive_answer(sources, "No LLM is configured (extractive mode).")
-            yield {"type": "delta", "text": answer.answer}
         else:
-            messages = [*history, {"role": "user", "content": prompts.user_message(question, sources)}]
+            # History is only used by the query condenser; untrusted historic assistant turns
+            # must never become authoritative conversation instructions to the answer model.
+            messages = [{"role": "user", "content": prompts.user_message(question, sources)}]
             llm_result = LLMResult()
             try:
-                for delta in self.llm.stream(self._system, messages, llm_result):
-                    yield {"type": "delta", "text": delta}
+                # Buffer model output; streaming unvalidated claims would leak before checks.
+                for _ in self.llm.stream(self._system, messages, llm_result):
+                    pass
                 answer.answer, answer.model, answer.usage = llm_result.text, llm_result.model, llm_result.usage
                 if llm_result.refused:
                     answer.mode = "refused"
@@ -225,17 +239,34 @@ class QAEngine:
                 answer.mode = "extractive"
                 answer.warnings.append(f"LLM unavailable ({exc}); showing the retrieved provisions instead.")
                 answer.answer = self._extractive_answer(sources, "The language model is unavailable.")
-                yield {"type": "delta", "text": ("\n\n" if llm_result.text else "") + answer.answer}
-
         answer.citations = extract_citations(answer.answer, answer.sources)
+        if answer.mode == "llm":
+            missing = not answer.citations and not any(
+                p in answer.answer.lower() for p in ("cannot determine", "not enough information",
+                    "do not contain", "don't contain", "insufficient information")
+            )
+            warning = unverified_warning(answer.citations)
+            if missing or warning or not answer.answer.strip():
+                answer.warnings.append(
+                    "LLM answer withheld: missing, unsupported or unverified citations. "
+                    "Displaying official excerpts instead."
+                )
+                answer.mode = "extractive"
+                answer.answer = self._extractive_answer(sources, "Answer validation did not pass.")
+                answer.citations = extract_citations(answer.answer, answer.sources)
         if warning := unverified_warning(answer.citations):
             answer.warnings.append(warning)
+        # The only user-visible delta is the post-validation answer.
+        yield {"type": "delta", "text": answer.answer}
         answer.latency_ms = int((time.perf_counter() - started) * 1000)
         yield {"type": "done", "answer": answer.to_dict()}
 
-    def ask(self, question: str, history: History | None = None, top_k: int | None = None) -> Answer:
+    def ask(
+        self, question: str, history: History | None = None, top_k: int | None = None,
+        identity: str = "anonymous",
+    ) -> Answer:
         final: dict[str, Any] | None = None
-        for event in self.ask_stream(question, history, top_k):
+        for event in self.ask_stream(question, history, top_k, identity):
             if event["type"] == "done":
                 final = event["answer"]
         assert final is not None

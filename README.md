@@ -135,6 +135,15 @@ tests/                      pytest suite
 All settings are environment variables (prefix `AIACT_`, see [`.env.example`](.env.example)): provider and model,
 embedding model, optional re-ranker, `top_k`, relevance threshold, API key, Claude effort and refusal fallbacks.
 
+## MVP hardening (review branch)
+
+- UI access is password-protected when `AIACT_UI_PASSWORD` is configured. Docker Compose requires it and a separate API key.
+- Shared SQLite global request quotas and conservative estimated USD reservations cover both the API and UI. These reservations are **not provider bills** and do not guarantee an exact spend cap. Set provider-side limits as well.
+- LLM model selection is restricted to deployment configuration; max output and context are reduced for predictable costs.
+- Generation buffers text and withholds unsupported/unverifiable citations before displaying the answer. This is a structural gate, **not semantic legal fact-checking**.
+- The legal corpus is still the original 2024 publication. A production system needs consolidated versions, human review and live-model evaluation.
+- Re-run the full dependency-backed test suite and live provider evaluation before promotion; the review branch is not certified for production.
+
 ## Limitations
 
 Single regulation in English (original 2024 text, no consolidated amendments); multi-hop questions spanning unrelated

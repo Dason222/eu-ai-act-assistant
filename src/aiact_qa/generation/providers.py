@@ -52,7 +52,7 @@ class ProviderInfo:
 PROVIDERS: dict[str, ProviderInfo] = {
     p.id: p
     for p in [
-        ProviderInfo("anthropic", "Anthropic Claude", "claude-opus-5-5", "ANTHROPIC_API_KEY",
+        ProviderInfo("anthropic", "Anthropic Claude", "claude-sonnet-5-5", "ANTHROPIC_API_KEY",
                      hosting="Anthropic API (also via AWS Bedrock, Google Vertex AI, Microsoft Foundry)"),
         ProviderInfo("openai", "OpenAI (ChatGPT models)", "gpt-5", "OPENAI_API_KEY",
                      hosting="OpenAI API"),

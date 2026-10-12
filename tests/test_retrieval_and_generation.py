@@ -99,10 +99,9 @@ def test_engine_with_llm_condenses_and_validates(regulation, chunks, tmp_path):
     assert "<excerpts>" in prompt and "<question>\nand deployers?\n</question>" in prompt
     assert llm.calls[1]["system"][0]["cache_control"] == {"type": "ephemeral"}
     assert "Table of contents" in llm.calls[1]["system"][0]["text"]
-    verified = {c.provision_id: c.verified for c in answer.citations}
-    assert verified.get("art_5") is not None
-    if not verified["art_99"]:
-        assert any("could not be verified" in w for w in answer.warnings)
+    # Unsupported model claims are withheld rather than shown as validated answers.
+    assert answer.mode == "extractive"
+    assert any("LLM answer withheld" in w for w in answer.warnings)
 
 
 def test_claude_request_parameters():
