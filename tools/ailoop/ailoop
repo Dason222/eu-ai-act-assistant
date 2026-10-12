@@ -1,0 +1,284 @@
+#!/usr/bin/env python3
+"""ailoop manager: task state, cross-model review and checks for Claude Code tasks.
+
+Not an AI. Claude Code (via the /ailoop and /ailoop-nohuman commands) does the work; this script records
+the task, collects the diff, asks Codex for a read-only review, counts cycles, records human decisions and
+runs the repository's checks on PASS. State lives in SQLite (~/.ailoop/state.db) and Git (the base commit
+of each task), so a reboot or a dropped SSH session loses nothing.
+
+    ailoop start   --repo . --task "..." [--nohuman] [--max-cycles 4] [--check "make test"]
+    ailoop review  ID          # Codex read-only review of the diff since the task's base commit
+    ailoop decide  ID fix|ignore|redo "note"
+    ailoop handover ID         # Claude unavailable: Codex continues the task (workspace-write)
+    ailoop status  [ID]
+    ailoop log     ID [--md FILE]
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import re
+import sqlite3
+import subprocess
+import sys
+import time
+from pathlib import Path
+
+HOME = Path.home() / ".ailoop"
+DB = HOME / "state.db"
+MAX_DIFF_CHARS = 120_000
+
+REVIEW_PROMPT = """You are a senior code reviewer. Another AI agent (Claude Code) implemented the task below in this
+repository. You are read-only: do not modify files. Review ONLY what the diff changes, against the task.
+
+Check:
+1. Every requirement of the task is implemented (list any that are missing).
+2. Bugs, regressions, broken edge cases, wrong logic.
+3. Hallucinations: claims in code, comments or docs that the code or data does not support (invented
+   numbers, files, functions, results).
+4. Inconsistencies between code, tests and documentation touched by the diff.
+Ignore style nits that do not affect correctness.
+
+You may read any file in the repository to verify a claim.
+
+Reply with ONLY a JSON object, no prose before or after:
+{"verdict": "PASS" or "FAIL",
+ "summary": "one sentence",
+ "findings": [{"severity": "high|medium|low", "file": "path", "issue": "what is wrong", "fix": "what to do"}]}
+Use FAIL if there is any high or medium finding; PASS otherwise (low findings may remain).
+
+<task>
+{task}
+</task>
+
+<previous_decisions>
+{decisions}
+</previous_decisions>
+
+<diff base="{base}">
+{diff}
+</diff>
+"""
+
+HANDOVER_PROMPT = """Continue this task in the repository. Claude Code is unavailable, you take over.
+Make the changes, keep them minimal, run the checks, and summarise what you changed.
+
+<task>
+{task}
+</task>
+
+<latest_review_findings>
+{findings}
+</latest_review_findings>
+"""
+
+
+def db() -> sqlite3.Connection:
+    HOME.mkdir(parents=True, exist_ok=True)
+    con = sqlite3.connect(DB)
+    con.row_factory = sqlite3.Row
+    con.executescript("""
+    CREATE TABLE IF NOT EXISTS task (id INTEGER PRIMARY KEY, repo TEXT, task TEXT, base TEXT, mode TEXT,
+        max_cycles INTEGER, check_cmd TEXT, status TEXT, cycles INTEGER DEFAULT 0, created REAL, updated REAL);
+    CREATE TABLE IF NOT EXISTS event (id INTEGER PRIMARY KEY, task_id INTEGER, kind TEXT, data TEXT, at REAL);
+    """)
+    return con
+
+
+def git(repo: str, *args: str) -> str:
+    return subprocess.run(["git", "-C", repo, *args], capture_output=True, text=True, check=True).stdout
+
+
+def event(con, task_id: int, kind: str, data: dict) -> None:
+    con.execute("INSERT INTO event(task_id, kind, data, at) VALUES (?,?,?,?)",
+                (task_id, kind, json.dumps(data, ensure_ascii=False), time.time()))
+    con.execute("UPDATE task SET updated=? WHERE id=?", (time.time(), task_id))
+    con.commit()
+
+
+def get(con, task_id: int) -> sqlite3.Row:
+    row = con.execute("SELECT * FROM task WHERE id=?", (task_id,)).fetchone()
+    if not row:
+        sys.exit(f"ailoop: no task {task_id}")
+    return row
+
+
+def collect_diff(repo: str, base: str) -> str:
+    diff = git(repo, "diff", base, "--", ".", ":(exclude)*.ipynb", ":(exclude)*.png", ":(exclude)*.svg")
+    untracked = git(repo, "ls-files", "--others", "--exclude-standard").split()
+    for path in untracked:
+        p = Path(repo) / path
+        if p.suffix in {".png", ".svg", ".ipynb"} or p.stat().st_size > 200_000:
+            diff += f"\n--- new binary/large file: {path}\n"
+            continue
+        diff += f"\n--- /dev/null\n+++ b/{path} (new file)\n" + "".join(
+            "+" + line for line in p.read_text(errors="replace").splitlines(keepends=True))
+    if len(diff) > MAX_DIFF_CHARS:
+        diff = diff[:MAX_DIFF_CHARS] + "\n[diff truncated]\n"
+    return diff
+
+
+def parse_verdict(text: str) -> dict:
+    match = re.search(r"\{.*\}", text, re.S)
+    try:
+        data = json.loads(match.group(0)) if match else {}
+    except json.JSONDecodeError:
+        data = {}
+    if data.get("verdict") not in {"PASS", "FAIL"}:
+        return {"verdict": "FAIL", "summary": "reviewer output was not valid JSON", "findings": [],
+                "raw": text[-2000:]}
+    return data
+
+
+def cmd_start(a) -> None:
+    repo = str(Path(a.repo).resolve())
+    base = git(repo, "rev-parse", "HEAD").strip()
+    con = db()
+    cur = con.execute(
+        "INSERT INTO task(repo, task, base, mode, max_cycles, check_cmd, status, created, updated) "
+        "VALUES (?,?,?,?,?,?,?,?,?)",
+        (repo, a.task, base, "nohuman" if a.nohuman else "human", a.max_cycles, a.check, "working",
+         time.time(), time.time()))
+    con.commit()
+    event(con, cur.lastrowid, "start", {"base": base, "mode": "nohuman" if a.nohuman else "human"})
+    print(f"ailoop task {cur.lastrowid} started (base {base[:7]}, mode {'nohuman' if a.nohuman else 'human'})")
+
+
+def cmd_review(a) -> None:
+    con = db()
+    t = get(con, a.id)
+    diff = collect_diff(t["repo"], t["base"])
+    if not diff.strip():
+        sys.exit("ailoop: empty diff, nothing to review")
+    decisions = "\n".join(json.loads(r["data"])["text"] for r in
+                          con.execute("SELECT data FROM event WHERE task_id=? AND kind='decision'", (t["id"],)))
+    prompt = (REVIEW_PROMPT.replace("{task}", t["task"]).replace("{decisions}", decisions or "none")
+              .replace("{base}", t["base"][:7]).replace("{diff}", diff))
+    out = HOME / f"review-{t['id']}-{t['cycles'] + 1}.txt"
+    started = time.time()
+    run = subprocess.run(["codex", "exec", "--sandbox", "read-only", "-C", t["repo"], "-o", str(out), prompt],
+                         capture_output=True, text=True, timeout=1800)
+    text = out.read_text() if out.exists() else run.stdout[-4000:]
+    verdict = parse_verdict(text)
+    cycles = t["cycles"] + 1
+    event(con, t["id"], "review", {"cycle": cycles, "seconds": round(time.time() - started),
+                                    "diff_chars": len(diff), **verdict})
+    con.execute("UPDATE task SET cycles=? WHERE id=?", (cycles, t["id"]))
+
+    print(f"Codex review, cycle {cycles}: {verdict['verdict']} - {verdict.get('summary', '')}")
+    for f in verdict.get("findings", []):
+        print(f"  [{f.get('severity')}] {f.get('file')}: {f.get('issue')}\n      fix: {f.get('fix')}")
+
+    if verdict["verdict"] == "PASS":
+        # check_cmd is a shell command line written by the operator at `ailoop start` (e.g. "make test && ruff check .")
+        check = subprocess.run(t["check_cmd"], shell=True, cwd=t["repo"], capture_output=True, text=True) \
+            if t["check_cmd"] else None
+        ok = check is None or check.returncode == 0
+        tail = (check.stdout + check.stderr)[-1500:] if check else ""
+        event(con, t["id"], "checks", {"command": t["check_cmd"], "ok": ok, "tail": tail})
+        status = "done" if ok else "checks_failed"
+        print(f"Checks ({t['check_cmd'] or 'none'}): {'OK' if ok else 'FAILED'}\n{tail if not ok else ''}")
+    elif t["mode"] == "nohuman" and cycles < t["max_cycles"]:
+        status = "fixing"
+        print(f"NEXT: fix the findings above, then run: ailoop review {t['id']}  ({cycles}/{t['max_cycles']})")
+    else:
+        status = "waiting_human"
+        print("NEXT: stop and ask the human: fix / ignore <finding> / do it differently "
+              f"(record with: ailoop decide {t['id']} ...)")
+    con.execute("UPDATE task SET status=? WHERE id=?", (status, t["id"]))
+    con.commit()
+    print(f"status: {status}")
+
+
+def cmd_decide(a) -> None:
+    con = db()
+    t = get(con, a.id)
+    event(con, t["id"], "decision", {"action": a.action, "text": f"{a.action}: {a.note}"})
+    con.execute("UPDATE task SET status=? WHERE id=?", ("working", t["id"]))
+    con.commit()
+    print(f"recorded: {a.action}: {a.note}")
+
+
+def cmd_handover(a) -> None:
+    con = db()
+    t = get(con, a.id)
+    last = con.execute("SELECT data FROM event WHERE task_id=? AND kind='review' ORDER BY id DESC LIMIT 1",
+                       (t["id"],)).fetchone()
+    findings = json.dumps(json.loads(last["data"]).get("findings", []), indent=1) if last else "none"
+    event(con, t["id"], "handover", {"to": "codex"})
+    run = subprocess.run(["codex", "exec", "--sandbox", "workspace-write", "-C", t["repo"],
+                          HANDOVER_PROMPT.format(task=t["task"], findings=findings)], text=True)
+    event(con, t["id"], "handover_done", {"returncode": run.returncode})
+    print(f"Codex finished (exit {run.returncode}). Run: ailoop review {t['id']}")
+
+
+def cmd_status(a) -> None:
+    con = db()
+    rows = [get(con, a.id)] if a.id else con.execute("SELECT * FROM task ORDER BY id DESC LIMIT 10").fetchall()
+    for t in rows:
+        print(f"#{t['id']} {t['status']:14} cycles {t['cycles']}/{t['max_cycles']} {t['mode']:7} "
+              f"{Path(t['repo']).name}: {t['task'][:70]}")
+
+
+def cmd_log(a) -> None:
+    con = db()
+    t = get(con, a.id)
+    lines = [f"# ailoop task {t['id']}", "", f"* Repository: `{Path(t['repo']).name}`, base `{t['base'][:7]}`",
+             f"* Mode: `{t['mode']}`, cycles {t['cycles']}/{t['max_cycles']}, status **{t['status']}**",
+             f"* Checks: `{t['check_cmd'] or 'none'}`", "", "## Task", "", t["task"], "", "## Events", ""]
+    for e in con.execute("SELECT * FROM event WHERE task_id=? ORDER BY id", (t["id"],)):
+        d = json.loads(e["data"])
+        stamp = time.strftime("%Y-%m-%d %H:%M", time.gmtime(e["at"]))
+        if e["kind"] == "review":
+            lines.append(f"### {stamp} UTC · Codex review, cycle {d['cycle']}: **{d['verdict']}** ({d['seconds']} s)")
+            lines.append(f"{d.get('summary', '')}")
+            lines += [f"* [{f.get('severity')}] `{f.get('file')}`: {f.get('issue')} Fix: {f.get('fix')}"
+                      for f in d.get("findings", [])]
+            lines.append("")
+        elif e["kind"] == "checks":
+            lines += [f"### {stamp} UTC · checks `{d['command']}`: **{'OK' if d['ok'] else 'FAILED'}**", ""]
+        elif e["kind"] == "decision":
+            lines += [f"### {stamp} UTC · human decision: {d['text']}", ""]
+        else:
+            lines += [f"### {stamp} UTC · {e['kind']}", ""]
+    text = "\n".join(lines) + "\n"
+    if a.md:
+        Path(a.md).write_text(text)
+        print(f"written {a.md}")
+    else:
+        print(text)
+
+
+def main() -> None:
+    p = argparse.ArgumentParser(prog="ailoop", description=__doc__, formatter_class=argparse.RawTextHelpFormatter)
+    sub = p.add_subparsers(dest="cmd", required=True)
+    s = sub.add_parser("start")
+    s.add_argument("--repo", default=".")
+    s.add_argument("--task", required=True)
+    s.add_argument("--nohuman", action="store_true")
+    s.add_argument("--max-cycles", type=int, default=4)
+    s.add_argument("--check", default="")
+    s.set_defaults(fn=cmd_start)
+    for name, fn in (("review", cmd_review), ("handover", cmd_handover)):
+        x = sub.add_parser(name)
+        x.add_argument("id", type=int)
+        x.set_defaults(fn=fn)
+    d = sub.add_parser("decide")
+    d.add_argument("id", type=int)
+    d.add_argument("action", choices=["fix", "ignore", "redo"])
+    d.add_argument("note")
+    d.set_defaults(fn=cmd_decide)
+    st = sub.add_parser("status")
+    st.add_argument("id", type=int, nargs="?")
+    st.set_defaults(fn=cmd_status)
+    lg = sub.add_parser("log")
+    lg.add_argument("id", type=int)
+    lg.add_argument("--md")
+    lg.set_defaults(fn=cmd_log)
+    a = p.parse_args()
+    a.fn(a)
+
+
+if __name__ == "__main__":
+    main()

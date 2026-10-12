@@ -28,13 +28,17 @@ C = {
 
 W, H = 200, 78  # default node size
 
+# grid for the prototype page: columns x, rows y
+X0, X1, X2, X3, X4, X5 = 40, 320, 610, 910, 1210, 1500
+R1, R2, R3, RQ = 340, 500, 650, 890
+
 PROTOTYPE = {
     "name": "Prototype - component view",
-    "size": (1700, 1060),
+    "size": (1700, 1070),
     "lanes": [
         ("Offline ingestion (batch, `aiact-qa ingest`)", 20, 40, 1660, 230, "ingest"),
-        ("Online query pipeline (QAEngine)", 20, 300, 1660, 470, "query"),
-        ("Quality loop", 20, 800, 1660, 230, "qa"),
+        ("Online query pipeline (QAEngine)", 20, 300, 1660, 480, "query"),
+        ("Quality loop", 20, 810, 1660, 230, "qa"),
     ],
     "nodes": [
         # id, title, detail (input -> output), x, y, layer, w, h
@@ -44,47 +48,57 @@ PROTOTYPE = {
          110, "ingest", 220, 78),
         ("chunk", "Chunker", "provisions -> 570 chunks\n(<=280 words, breadcrumbs)", 850, 110, "ingest", 190, 78),
         ("embed", "Embedder", "bge-small (ONNX, CPU)\nchunks -> 384-d vectors", 1120, 110, "ingest", 210, 78),
-        ("store", "Knowledge store", "regulation.json, chunks.json,\nembeddings.npy, BM25 (in-memory)", 1410, 110,
-         "store", 250, 78),
-        ("ui", "Streamlit chat UI", "question, model choice -> streamed\nanswer, sources, feedback", 40, 340, "ui",
-         210, 78),
-        ("api", "REST API (FastAPI)", "/ask, /ask/stream (SSE), /search,\n/provisions, /providers, /feedback", 40,
-         470, "ui", 210, 78),
-        ("cli", "CLI / notebook", "ingest | ask | search | eval", 40, 600, "ui", 210, 62),
-        ("guard", "Input guardrails", "question + history -> validated\n(length, history window)", 330, 340,
-         "query", 200, 78),
-        ("condense", "Query condenser", "follow-up / non-English ->\nstandalone English query", 610, 340, "query",
-         200, 78),
-        ("retrieve", "Hybrid retriever", "references + BM25 + dense -> RRF\n-> ranked, diverse chunks", 890, 340,
+        ("store", "Knowledge store", "regulation.json, chunks.json, paragraph\nanchors, embeddings.npy, BM25", 1410,
+         110, "store", 250, 78),
+        ("ui", "Streamlit chat UI", "question, model choice -> answer\nwith linked citations, sources", X0, R1,
+         "ui", 210, 78),
+        ("api", "REST API (FastAPI)", "/ask, /ask/stream, /search,\n/provisions, /providers, /feedback", X0, R2,
+         "ui", 210, 78),
+        ("cli", "CLI / notebook", "ingest | ask | search | eval", X0, R3, "ui", 210, 62),
+        ("guard", "Input guard & budget", "length + history limits, per-visitor\nquota, daily spend budget", X1,
+         R1, "query", 230, 78),
+        ("condense", "Query condenser", "follow-up / non-English ->\nstandalone English query", X2, R1, "query",
+         220, 78),
+        ("retrieve", "Hybrid retriever", "references + BM25 + dense -> RRF\n-> ranked, diverse chunks", X3, R1,
+         "query", 240, 78),
+        ("gate", "Relevance gate", "best similarity < 0.55, no reference\n-> out of scope, no LLM call", X4, R1,
+         "query", 220, 78),
+        ("oos", "Out-of-scope reply", "gate or model refusal\nmarker -> fixed refusal", X5, R1, "query", 160, 78),
+        ("context", "Context builder", "top-k chunks -> numbered excerpts\n(2,600-word budget) + cached ToC", X4,
+         R2, "query", 220, 78),
+        ("llm", "LLM gateway", "allowlisted provider + model;\ndraft buffered until validated", X3, R2, "llm",
+         240, 78),
+        ("cite", "Citation validator", "[Article 50(3)] -> EUR-Lex #050.003;\nfails -> quoted provisions", X2, R2,
+         "query", 220, 78),
+        ("answer", "Answer", "answer, linked citations, sources,\nmode, usage, latency, warnings", X1, R2,
          "query", 230, 78),
-        ("gate", "Relevance gate", "best similarity < 0.55, no reference\n-> out-of-scope reply, no LLM call",
-         1200, 340, "query", 240, 78),
-        ("context", "Context builder", "top-k chunks -> numbered excerpts\n(6k-word budget) + cached ToC", 1200,
-         520, "query", 240, 78),
-        ("llm", "LLM gateway (provider adapter)", "system + excerpts + question ->\nstreamed grounded answer", 890,
-         520, "llm", 230, 78),
-        ("cite", "Citation validator", "[Article 6(2)] -> provision id,\nverified vs sources + EUR-Lex link", 610,
-         520, "query", 200, 78),
-        ("answer", "Answer", "answer, sources, citations, mode,\nusage, latency, warnings", 330, 520, "query",
-         200, 78),
-        ("providers", "LLM providers", "Anthropic Claude (default) | OpenAI |\nAzure OpenAI | Mistral (EU) |\n"
-         "self-hosted Ollama/vLLM | EU OpenAI-compatible", 870, 655, "ext", 270, 92),
-        ("golden", "Golden set (57 Q)", "verified vs. the text\n(13 categories)", 330, 870, "qa", 200, 78),
-        ("runner", "Evaluation runner", "questions -> hit@k, recall, MRR,\ncitation precision, must-contain",
-         610, 870, "qa", 230, 78),
-        ("judge", "LLM judge (optional)", "answer + excerpts ->\nfaithfulness, completeness", 920, 870, "qa", 210,
-         78),
-        ("feedback", "Feedback log", "thumbs up/down from UI and API\n(JSONL) -> new test cases", 1210, 870, "qa",
-         230, 78),
+        ("providers", "LLM providers", "OpenAI (live demo) | Anthropic Claude |\nAzure OpenAI | Mistral (EU) |\n"
+         "self-hosted Ollama/vLLM | EU OpenAI-compatible", X3 - 20, R3, "ext", 280, 92),
+        ("feedback", "Feedback log", "ratings from UI and API\n(JSONL) -> new test cases", X0, RQ, "qa", 210, 78),
+        ("golden", "Golden set (57 Q)", "verified against the text\n(13 categories)", X1, RQ, "qa", 230, 78),
+        ("runner", "Evaluation runner", "QAEngine answers -> hit@k, MRR,\ncitation precision, must-contain", X2,
+         RQ, "qa", 240, 78),
+        ("judge", "LLM judge (optional)", "answer + excerpts ->\nfaithfulness, completeness", X3, RQ, "qa", 240, 78),
+        ("probes", "Red-team probes (15)", "jailbreak, injection,\nfabrication pressure", X4, RQ, "qa", 230, 78),
+        ("redteam", "Red-team runner", "3 runs per probe ->\nsafe / ideal scores", X5, RQ, "qa", 160, 78),
     ],
     "edges": [
+        # (source, target, label[, explicit polyline from source side to target side])
         ("eurlex", "fetch", "HTML"), ("fetch", "parse", "snapshot"), ("parse", "chunk", "provisions"),
         ("chunk", "embed", "chunks"), ("embed", "store", "vectors"),
-        ("ui", "guard", "question"), ("api", "guard", ""), ("guard", "condense", ""),
-        ("condense", "retrieve", "query"), ("store", "retrieve", "index"), ("retrieve", "gate", "hits"),
-        ("gate", "context", "in scope"), ("context", "llm", "prompt"), ("llm", "providers", "API call / stream"),
-        ("llm", "cite", "draft"), ("cite", "answer", "checked"), ("answer", "api", "JSON / SSE"),
-        ("golden", "runner", ""), ("runner", "cli", "aiact-qa eval"), ("runner", "judge", ""),
+        ("store", "retrieve", "index", [(1535, 188), (1535, 285), (1030, 285), (1030, R1)]),
+        ("ui", "guard", "question"),
+        ("api", "guard", "", [(250, R2 + 20), (285, R2 + 20), (285, R1 + 58), (X1, R1 + 58)]),
+        ("guard", "condense", ""), ("condense", "retrieve", "query"), ("retrieve", "gate", "hits"),
+        ("gate", "oos", "refuse"), ("gate", "context", "in scope"), ("context", "llm", "prompt"),
+        ("llm", "providers", "API call"), ("llm", "cite", "draft"), ("cite", "answer", "validated"),
+        ("answer", "api", "JSON / SSE", [(X1, R2 + 58), (250, R2 + 58)]),
+        ("answer", "ui", "answer", [(X1 + 60, R2), (X1 + 60, R1 + 100), (265, R1 + 100), (265, R1 + 62),
+                                    (250, R1 + 62)]),
+        ("cli", "runner", "aiact-qa eval", [(145, R3 + 62), (145, 795), (X2 + 120, 795), (X2 + 120, RQ)]),
+        ("api", "feedback", "rating", [(40, R2 + 60), (30, R2 + 60), (30, RQ + 39), (40, RQ + 39)]),
+        ("feedback", "golden", "new cases"), ("golden", "runner", ""), ("runner", "judge", ""),
+        ("probes", "redteam", ""),
     ],
 }
 
@@ -132,7 +146,8 @@ PRODUCTION = {
     ],
     "edges": [
         ("users", "channels", ""), ("channels", "edge", "HTTPS"), ("edge", "qa", "authenticated request"),
-        ("qa", "gw", "prompt"), ("gw", "prov", "API"), ("qa", "retr", "query"), ("qa", "val", "draft"),
+        ("qa", "gw", "prompt"), ("gw", "prov", "API"), ("qa", "retr", "query"),
+        ("qa", "val", "draft", [(900, 318), (945, 318), (945, 425), (990, 425)]),
         ("retr", "vec", "search"), ("cellar", "pipe", "new acts"), ("pipe", "vec", "index"),
         ("pipe", "docs", "store"), ("val", "conv", "answer + audit"),
     ],
@@ -163,6 +178,23 @@ def _anchor(a: dict, b: dict) -> tuple[tuple[float, float], tuple[float, float]]
     return sa, sb
 
 
+DASHED = {"refuse", "rating"}
+
+
+def route(a: dict, b: dict, points: list | None) -> list[tuple[float, float]]:
+    """Explicit polyline, a straight line when the facing sides line up, otherwise one elbow."""
+    if points:
+        return points
+    (x1, y1), (x2, y2) = _anchor(a, b)
+    if abs(x1 - x2) < 1 or abs(y1 - y2) < 1:
+        return [(x1, y1), (x2, y2)]
+    if x1 in (a["x"], a["x"] + a["w"]):  # leaves from a vertical side: horizontal-vertical-horizontal
+        xm = (x1 + x2) / 2
+        return [(x1, y1), (xm, y1), (xm, y2), (x2, y2)]
+    ym = (y1 + y2) / 2
+    return [(x1, y1), (x1, ym), (x2, ym), (x2, y2)]
+
+
 def to_svg(spec: dict) -> str:
     width, height = spec["size"]
     nodes = _nodes(spec)
@@ -181,13 +213,17 @@ def to_svg(spec: dict) -> str:
                      f'stroke="{stroke}" stroke-dasharray="6 4"/>')
         parts.append(f'<text x="{x + 12}" y="{y + 20}" font-size="13" font-weight="bold" fill="{stroke}">'
                      f'{html.escape(title)}</text>')
-    for src, dst, label in spec["edges"]:
-        (x1, y1), (x2, y2) = _anchor(nodes[src], nodes[dst])
-        dash = ' stroke-dasharray="5 4"' if label in {"out of scope", "rating", "test traffic"} else ""
-        parts.append(f'<line x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}" stroke="#444" stroke-width="1.5"{dash} '
+    for edge in spec["edges"]:
+        src, dst, label = edge[:3]
+        pts = route(nodes[src], nodes[dst], edge[3] if len(edge) > 3 else None)
+        dash = ' stroke-dasharray="5 4"' if label in DASHED else ""
+        path = " ".join(f"{x},{y}" for x, y in pts)
+        parts.append(f'<polyline points="{path}" fill="none" stroke="#444" stroke-width="1.5"{dash} '
                      'marker-end="url(#arrow)"/>')
         if label:
-            mx, my = (x1 + x2) / 2, (y1 + y2) / 2
+            segments = list(zip(pts, pts[1:], strict=False))
+            (ax, ay), (bx, by) = max(segments, key=lambda s: abs(s[1][0] - s[0][0]) + abs(s[1][1] - s[0][1]))
+            mx, my = (ax + bx) / 2, (ay + by) / 2
             tw = 6.2 * len(label) + 8
             parts.append(f'<rect x="{mx - tw / 2}" y="{my - 9}" width="{tw}" height="16" rx="3" fill="#FFFFFF" '
                          'fill-opacity="0.9"/>')
@@ -227,12 +263,17 @@ def to_drawio_page(spec: dict, page_id: str) -> str:
         cells.append(f'<mxCell id="{page_id}-{n["id"]}" value="{value}" style="{style}" vertex="1" parent="1">'
                      f'<mxGeometry x="{n["x"]}" y="{n["y"]}" width="{n["w"]}" height="{n["h"]}" as="geometry"/>'
                      "</mxCell>")
-    for i, (src, dst, label) in enumerate(spec["edges"]):
-        dashed = "dashed=1;" if label in {"out of scope", "rating", "test traffic"} else ""
+    for i, edge in enumerate(spec["edges"]):
+        src, dst, label = edge[:3]
+        dashed = "dashed=1;" if label in DASHED else ""
         style = f"edgeStyle=orthogonalEdgeStyle;rounded=1;html=1;endArrow=block;fontSize=10;{dashed}"
+        waypoints = ""
+        if len(edge) > 3:
+            waypoints = '<Array as="points">' + "".join(
+                f'<mxPoint x="{x}" y="{y}"/>' for x, y in edge[3][1:-1]) + "</Array>"
         cells.append(f'<mxCell id="{page_id}-e{i}" value="{html.escape(label)}" style="{style}" edge="1" '
                      f'parent="1" source="{page_id}-{src}" target="{page_id}-{dst}">'
-                     '<mxGeometry relative="1" as="geometry"/></mxCell>')
+                     f'<mxGeometry relative="1" as="geometry">{waypoints}</mxGeometry></mxCell>')
     width, height = spec["size"]
     return (f'<diagram id="{page_id}" name="{html.escape(spec["name"])}"><mxGraphModel dx="{width}" dy="{height}" '
             f'grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" '
@@ -243,7 +284,8 @@ def to_drawio_page(spec: dict, page_id: str) -> str:
 def render_png(svg_path: Path, png_path: Path, size: tuple[int, int]) -> None:
     from playwright.sync_api import sync_playwright
 
-    candidates = glob.glob("/opt/pw-browsers/chromium-*/chrome-linux*/chrome")
+    candidates = sorted(glob.glob("/opt/pw-browsers/chromium-*/chrome-linux*/chrome")
+                        + glob.glob(str(Path.home() / ".cache/ms-playwright/chromium-*/chrome-linux*/chrome")))
     with sync_playwright() as p:
         args = ["--disable-gpu", "--no-sandbox"]
         browser = p.chromium.launch(executable_path=candidates[0] if candidates else None, args=args)

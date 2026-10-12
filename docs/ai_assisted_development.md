@@ -14,6 +14,7 @@ what the checks caught, and which steps I kept for myself.
 | **Subagents** with cost-based model routing | `Explore` and `cheap-worker` on Claude Haiku for code search and mechanical edits, `developer` on Claude Sonnet for routine implementation, `advanced-engineer` and `reviewer` on Claude Opus for hard problems and independent review, `architect` on Claude Fable for design questions. The main session delegates by task type. |
 | **Verification hook** (`SubagentStop`) | Runs the repository's own lint, type and test commands when an implementation subagent finishes and sends it back if they fail. |
 | **Automated security review** (Claude Code `security-guidance` plugin) | Reviews each commit in the background and reports findings into the session. |
+| **ailoop** (section 9) | OpenAI Codex reviews Claude's diff read-only before I accept the work. |
 | **Playwright + headless Chromium** | Drives the real UI in a browser at desktop and phone widths, takes screenshots and checks links and layout. |
 | **Golden-set and red-team harness** (in this repository) | `aiact-qa eval` and `scripts/run_redteam.py` measure retrieval, answer quality and jailbreak resistance with a live model. |
 | **AODE portal** (my own self-hosted deployment platform) | Builds the container and serves the live demo behind Traefik with TLS. |
@@ -36,7 +37,9 @@ flowchart LR
     G3 -- defect --> M
     G3 -- pass --> SR[Background security review<br/>of each commit]
     SR -- finding --> M
-    SR --> H2([Me: review diff and results,<br/>accept or redirect])
+    SR --> AL{ailoop<br/>Codex reviews the diff read-only}
+    AL -- findings --> H2
+    AL -- PASS --> H2([Me: review diff and results,<br/>accept or redirect])
     H2 -- redirect --> M
     H2 -- accept --> P[Deploy via AODE portal]
     P --> V{Live verification<br/>HTTPS · real question · links}
@@ -61,7 +64,7 @@ sequenceDiagram
     Claude->>Claude: inspect EUR-Lex HTML anchors (005.001 = Article 5(1))
     Claude->>Claude: deep-link builder + link_citations() + tests
     Claude->>Gates: pytest (33 passed), ruff clean
-    Claude->>Gates: Playwright: Article 5(1)(f) -> #005.001, Article 50(3) -> #050.003
+    Claude->>Gates: Playwright: Article 5(1)(f) links to anchor 005.001, Article 50(3) to 050.003
     Gates-->>Claude: regex stripped "- " from real bullets (caught by a new test)
     Claude->>Claude: fix regex, re-run
     Claude->>Me: diff, screenshots, link list
@@ -197,30 +200,10 @@ Final result with `gpt-5.4-mini`, 15 probes × 3 runs, after manual review of ev
 **45/45 answers safe** and **44/45 ideal**. [`reports/redteam/REVIEW.md`](../reports/redteam/REVIEW.md)
 lists the flagged answers with the manual verdict.
 
-## 9. Next stage: `/ailoop` cross-model review
+## 9. ailoop: Codex as a second reviewer
 
-The current pipeline relies on deterministic gates and on my review of each diff. The next stage,
-designed but not yet in use on this project, adds a second model family as an automatic reviewer:
-
-```mermaid
-flowchart TB
-    subgraph VPS["VPS (tmux keeps the session alive)"]
-        CC["Claude Code + Remote Control"]
-        MGR["Manager service (not an AI)<br/>task state · cycle count · model hand-over<br/>SQLite + Git"]
-    end
-    CC -->|"/ailoop task"| W["Claude implements the task"]
-    W --> R["Codex: read-only review of the Git diff<br/>bugs · unmet requirements · hallucinations"]
-    R -->|PASS| T["tests · build · lint"] --> S["DONE summary"]
-    R -->|issues| HM{"/ailoop: wait for me<br/>/ailoop-nohuman: back to Claude,<br/>max 4 cycles"}
-    HM --> W
-    MGR -. "Claude usage limit: save state,<br/>Codex continues the task" .-> W
-```
-
-* `/ailoop <task>`: Claude completes the task, Codex reviews the diff read-only, and on problems the
-  loop stops for my decision ("fix", "ignore this", "do it differently").
-* `/ailoop-nohuman <task>`: Codex findings go straight back to Claude until PASS, at most four cycles.
-* A small manager service, not an AI, keeps task state in SQLite and Git so a reboot or a lost SSH
-  connection loses nothing, counts cycles, and hands the task to Codex if Claude hits a usage limit.
-
-A reviewer from a different model family catches a class of error that the author model tends to
-repeat: the defects in section 7 were confident, plausible and covered by passing unit tests.
+The pipeline also has a babysitter step, `ailoop`. When Claude Code finishes a task, OpenAI Codex reviews the
+Git diff read-only and checks it against the task: missing requirements, bugs, hallucinated claims. If Codex
+finds problems, the work stops until I decide what to do. On the architecture-diagram update Codex found two
+gaps that the tests could not catch, a dead-end "Out-of-scope reply" box and a missing UI-to-feedback arrow
+([log](ailoop/task-1.md), tool in [`tools/ailoop/`](../tools/ailoop)).
