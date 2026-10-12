@@ -1,0 +1,8 @@
+# Build settings for the AODE portal (self-hosted PaaS that serves the live demo).
+# The portal generates its own Python Dockerfile; these steps reproduce ./Dockerfile:
+# install the package after the sources are copied, build the index into the image, run the chat UI on $PORT.
+runtime: python:3.12
+install: pip install --no-cache-dir --upgrade pip
+build: pip install --no-cache-dir . && aiact-qa ingest
+start: exec streamlit run app/ui.py --server.port=${PORT:-8501} --server.address=0.0.0.0 --server.headless=true --browser.gatherUsageStats=false
+port: 8501
