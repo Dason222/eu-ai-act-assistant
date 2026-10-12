@@ -120,3 +120,13 @@ def test_timing_questions_retrieve_article_113(chunks):
     retriever = HybridRetriever(chunks, dense=None)
     hits = retriever.retrieve("When do the bans on prohibited AI practices apply?", k=8).hits
     assert hits[0].chunk.provision_id == "art_113"
+
+
+def test_non_existent_provisions_lose_their_brackets():
+    from aiact_qa.generation.prompts import unbracket_missing
+
+    text = "I cannot cite [Article 999]; see [Article 5(1)(a)] and [Annex XV], not [Article 5, Article 999]."
+    assert unbracket_missing(text) == (
+        "I cannot cite Article 999; see [Article 5(1)(a)] and Annex XV, not [Article 5, Article 999]."
+    )
+    assert unbracket_missing("[OUT_OF_SCOPE]") == "[OUT_OF_SCOPE]"
