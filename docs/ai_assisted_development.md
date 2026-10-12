@@ -102,8 +102,8 @@ My main instructions to the agents, condensed from the sessions:
    prototype code in Python. Build it close to an MVP."*
 2. *"Use subagent development."*
 3. *"Support not only Claude but also ChatGPT and European AI models."*
-4. *"Check the repository and tell me which files to send to the interviewer."*
-5. *"Fix the issues, test it with the OpenAI API and host it through my portal at ey.theaode.com."*
+4. *"Review the repository against the task requirements and fix the issues."*
+5. *"Test it with the OpenAI API and host it through my portal at ey.theaode.com."*
 6. *"Turn the citations into links to the document and the article."* and *"Update the UI/UX."*
 7. *"Write jailbreak prompts so I can check how robust the assistant is."*
 
