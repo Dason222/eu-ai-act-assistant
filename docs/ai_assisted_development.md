@@ -131,12 +131,12 @@ The product's own prompts (grounded-answer system prompt, follow-up condenser, L
 |---|---|---|
 | Structural fidelity | parser counts vs the Official Journal | 113 articles, 180 recitals, 13 annexes, 68 definitions, 13 chapters: exact |
 | Text fidelity | manual spot checks of Articles 1, 3, 4, 5, 9, 50, 51, 99 and Annexes I, III, VII | 2 defects found and fixed: dropped 3-column tables, "1025" instead of "10^25" |
-| Unit and integration tests | `make test` | 38 passed |
+| Unit and integration tests | `make test` | 39 passed |
 | Static analysis | `ruff check .` | clean |
 | Golden-set integrity | `scripts/verify_golden_set.py` | 57/57 questions valid |
-| Retrieval quality | `aiact-qa eval --provider extractive` | hit@8 0.98, recall@8 0.96, MRR 0.85 |
+| Retrieval quality | `aiact-qa eval --provider extractive` | hit@8 0.98, recall@8 0.96, MRR 0.86 |
 | Answer quality, live model | `aiact-qa eval --provider openai --model gpt-5.4-mini` | see [README](../README.md#results) |
-| Jailbreak resistance | `python scripts/run_redteam.py --runs 3` | 45/45 answers safe, 45/45 ideal ([report](../reports/redteam/REVIEW.md)) |
+| Jailbreak resistance | `python scripts/run_redteam.py --runs 3` | 45/45 answers safe, 44/45 ideal ([report](../reports/redteam/REVIEW.md)) |
 | UI | Playwright, 1440 px and 390 px | links open the cited provision on a fresh page load, no horizontal scroll |
 | Reverse-proxy trust | throwaway `whoami` container behind the production Traefik | spoofed `X-Real-Ip` replaced by the real client address |
 | Live deployment | HTTPS request + browser session on `ey.theaode.com` | 200, Let's Encrypt certificate, cited answer in about 2 s |
@@ -159,6 +159,7 @@ tests and only surfaced in a later gate:
 | A Lithuanian injection was refused in Lithuanian and then withheld by an English-only refusal check | red-team | language-independent refusal marker |
 | Date questions cited Recital 179 instead of Article 113, because topical wording ranked Article 5 above it | manual testing of the live demo | timing questions always retrieve Article 113 |
 | The no-verdict rule made general answers hedge: no "No" for workplace emotion recognition, and a closing paragraph on what "the assessment depends on" | manual testing of the live demo | general questions start with "Yes" or "No"; only product-compliance questions get no verdict |
+| "What is a deployer?" asked mid-conversation missed the Article 3(4) definition: the follow-up rewriter appended "(Regulation (EU) 2024/1689)", whose number boosted the articles that amend other regulations, and once mixed in the previous topic | manual testing of the live demo | the rewriter returns complete questions unchanged; retrieval ignores the act's own name |
 | The model wrote "[Article 999]" in brackets while saying it does not exist, which reads as a citation | red-team | brackets removed around provisions the regulation does not have |
 | Citation links opened EUR-Lex at the top of the page: the browser check had confirmed the anchor exists, not that the page scrolls to it. EUR-Lex scrolls to provision ids (`art_23`) only on its HTML rendition, and to paragraph ids (`023.001`) on none | manual testing of the live demo; fresh-load browser test of each EUR-Lex URL form | links point to the provision on the HTML rendition |
 
@@ -207,8 +208,8 @@ only questions about a specific product's compliance get no verdict. The next re
 a side effect: the model bracketed "[Article 999]" while saying it does not exist, so the pipeline
 now removes brackets around provisions the regulation does not have.
 
-Final result with `gpt-5.4-mini`, 15 probes × 3 runs: **45/45 answers safe** and **45/45 ideal**;
-the automatic checks flagged no answer. [`reports/redteam/REVIEW.md`](../reports/redteam/REVIEW.md)
+Final result with `gpt-5.4-mini`, 15 probes × 3 runs, after manual review of every flagged answer:
+**45/45 answers safe** and **44/45 ideal**. [`reports/redteam/REVIEW.md`](../reports/redteam/REVIEW.md)
 lists the flagged answers with the manual verdict.
 
 ## 9. ailoop: Codex as a second reviewer
